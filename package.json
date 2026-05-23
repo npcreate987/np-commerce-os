@@ -1,0 +1,35 @@
+{
+  "name": "np-commerce-os",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NP Commerce OS — central commerce platform for online shops, local stores, creators, and customers.",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=web",
+    "dev:api": "turbo run dev --filter=api",
+    "build": "turbo run build",
+    "build:web": "turbo run build --filter=web",
+    "build:api": "turbo run build --filter=api",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "mobile:android": "echo 'TODO: add capacitor android build (Phase 2+)' && exit 1",
+    "mobile:ios": "echo 'TODO: add capacitor ios build (Phase 2+)' && exit 1"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "prettier": "^3.2.0"
+  }
+}

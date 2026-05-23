@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-state/
+.pnpm-cache/
+.pnpm-global/
+.npm-cache/
+.yarn/
+.npm/
+.npmrc
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.turbo/
+.vercel/
+.cache/
+
+# Env
+.env
+.env.local
+.env.*.local
+*.env
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Capacitor (เมื่อมี)
+android/
+ios/
+!apps/web/capacitor.config.ts
+
+# DB
+*.sqlite
+*.db
+prisma/migrations/dev/
+
+# Misc
+*.tsbuildinfo
+.eslintcache
+backups/
+
+# Local sandbox/runtime scratch dirs (do not commit)
+Library/
+tmp/
+.tmp/

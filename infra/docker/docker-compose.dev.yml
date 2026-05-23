@@ -1,0 +1,57 @@
+name: np-commerce-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: np_commerce
+    ports:
+      - "5432:5432"
+    volumes:
+      - np_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - np_redisdata:/data
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.9
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: dev-master-key
+      MEILI_ENV: development
+    ports:
+      - "7700:7700"
+    volumes:
+      - np_meilidata:/meili_data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - np_miniodata:/data
+
+volumes:
+  np_pgdata:
+  np_redisdata:
+  np_meilidata:
+  np_miniodata:
