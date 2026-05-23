@@ -1,0 +1,795 @@
+// NP Commerce OS — Phase 1 Prisma schema
+//
+// IMPORTANT: schema นี้ถูกออกแบบให้ "neutral" ใช้ได้ทั้ง SQLite (dev) และ Postgres (prod)
+// ตามที่ระบุใน docs/decisions/0002-dev-database-sqlite.md
+//
+// - id เก็บเป็น String + cuid()
+// - enum เก็บเป็น String (SQLite ใน Prisma ไม่รองรับ enum)
+//   ค่าที่ถูกต้องถูกบังคับด้วย Zod schema ใน @np/types
+// - shippingAddress เก็บเป็น String (JSON-stringified)
+// - เงินเก็บเป็น Int (cents/สตางค์)
+//
+// ตอน prod เปลี่ยน DATABASE_PROVIDER=postgresql + แปลง String → enum ผ่าน migration
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?  @unique
+  name         String?
+  passwordHash String
+  /// "CUSTOMER" | "MERCHANT" | "ADMIN"
+  role         String   @default("CUSTOMER")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shops     Shop[]
+  carts     Cart[]
+  orders    Order[]
+  addresses Address[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Shop {
+  id          String   @id @default(cuid())
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String   @unique
+  description String?
+  logoUrl     String?
+  /// "PENDING" | "ACTIVE" | "SUSPENDED"
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+  orders   Order[]
+
+  @@index([ownerId])
+  @@map("shops")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  priceCents  Int
+  stock       Int      @default(0)
+  /// "DRAFT" | "ACTIVE" | "ARCHIVED"
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  media      ProductMedia[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([shopId, status])
+  @@map("products")
+}
+
+model ProductMedia {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  /// "IMAGE" | "VIDEO"
+  kind      String   @default("IMAGE")
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId, sort])
+  @@map("product_media")
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  phone       String
+  line1       String
+  line2       String?
+  subDistrict String?
+  district    String?
+  province    String
+  postalCode  String
+  note        String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("carts")
+}
+
+model CartItem {
+  id             String   @id @default(cuid())
+  cartId         String
+  cart           Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity       Int
+  unitPriceCents Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  customerId    String
+  customer      User     @relation(fields: [customerId], references: [id])
+  shopId        String
+  shop          Shop     @relation(fields: [shopId], references: [id])
+  /// "PENDING_PAYMENT" | "PAID" | "READY_TO_SHIP" | "SHIPPED" | "DELIVERED" | "COMPLETED" | "CANCELLED" | "REFUNDED"
+  status        String   @default("PENDING_PAYMENT")
+  subtotalCents Int
+  shippingCents Int      @default(0)
+  totalCents    Int
+  /// JSON-stringified Address (Phase 1 dev compat)
+  shippingAddressJson String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items    OrderItem[]
+  payment  Payment?
+  shipment Shipment?
+  dispute  Dispute?
+
+  /// FK ของ carrier ที่ลูกค้าเลือกตอน checkout (set ก่อนสร้าง Shipment)
+  carrierCode String?
+
+  @@index([customerId, createdAt])
+  @@index([shopId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product @relation(fields: [productId], references: [id])
+  productName    String
+  unitPriceCents Int
+  quantity       Int
+  subtotalCents  Int
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// "PROMPTPAY" | "CARD" | "COD"
+  method        String
+  /// "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
+  status        String   @default("PENDING")
+  amountCents   Int
+  qrCodePayload String?
+  providerRef   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("payments")
+}
+
+// =============================================================================
+// Phase 2 — Trust & Logistics
+// =============================================================================
+
+/// Wallet ของผู้ใช้ (ส่วนใหญ่ใช้กับ merchant — เก็บเงินที่รอ payout)
+model Wallet {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  /// availableCents = เงินที่ปล่อยให้แล้ว (พร้อมถอน)
+  availableCents Int      @default(0)
+  /// pendingCents = เงินที่ค้างใน escrow (ยังไม่ release)
+  pendingCents   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  entries WalletEntry[]
+
+  @@map("wallets")
+}
+
+model WalletEntry {
+  id          String   @id @default(cuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  /// "ESCROW_HOLD" | "ESCROW_RELEASE" | "ESCROW_REFUND" | "PAYOUT" | "ADJUSTMENT"
+  kind        String
+  amountCents Int
+  orderId     String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([walletId, createdAt])
+  @@map("wallet_entries")
+}
+
+/// ผู้ขนส่ง (carrier) — Flash / Kerry / J&T / ฯลฯ
+model Carrier {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  /// "PARCEL" | "EXPRESS_LOCAL"
+  kind          String   @default("PARCEL")
+  logoUrl       String?
+  baseRateCents Int      @default(3000)
+  perKgCents    Int      @default(1500)
+  etaText       String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shipments Shipment[]
+
+  @@map("carriers")
+}
+
+model Shipment {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrierId  String
+  carrier    Carrier  @relation(fields: [carrierId], references: [id])
+  trackingNo String?
+  labelUrl   String?
+  costCents  Int      @default(0)
+  /// "LABEL_CREATED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "RETURNED"
+  status     String   @default("LABEL_CREATED")
+  events     String   @default("[]") // JSON array of {status,description,at}
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([carrierId, status])
+  @@map("shipments")
+}
+
+/// NP Protect — Dispute / Refund
+model Dispute {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// "OPEN" | "MERCHANT_REPLIED" | "ESCALATED" | "RESOLVED_REFUND" | "RESOLVED_RELEASE" | "CLOSED"
+  status      String   @default("OPEN")
+  /// "ITEM_NOT_RECEIVED" | "NOT_AS_DESCRIBED" | "DAMAGED" | "OTHER"
+  reason      String
+  description String
+  /// JSON array of image URLs
+  evidenceJson String  @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages DisputeMessage[]
+
+  @@index([status, createdAt])
+  @@map("disputes")
+}
+
+model DisputeMessage {
+  id         String   @id @default(cuid())
+  disputeId  String
+  dispute    Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  authorId   String
+  /// "CUSTOMER" | "MERCHANT" | "ADMIN"
+  authorRole String
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([disputeId, createdAt])
+  @@map("dispute_messages")
+}
+
+// =============================================================================
+// Phase 3 — Creator / Affiliate Center
+// =============================================================================
+
+/// โปรไฟล์ Creator — ทุก user เป็น creator ได้โดยไม่เปลี่ยน role
+model CreatorProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  displayName         String
+  bio                 String?
+  avatarUrl           String?
+  /// JSON array ของ {platform, url} เช่น TikTok, IG, YouTube
+  socialJson          String   @default("[]")
+  /// "PENDING" | "ACTIVE" | "SUSPENDED"
+  status              String   @default("ACTIVE")
+  /// คอมมิชชั่นเริ่มต้น (basis points; 500 = 5%)
+  defaultCommissionBps Int     @default(500)
+  /// สถิติสะสม (อัปเดตเมื่อมีการ release)
+  totalSalesCents     Int      @default(0)
+  totalCommissionCents Int     @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  links CreatorLink[]
+
+  @@index([status])
+  @@map("creator_profiles")
+}
+
+/// ลิงก์โปรโมท — ต่อสินค้า/ต่อร้าน
+model CreatorLink {
+  id             String   @id @default(cuid())
+  creatorId      String
+  creator        CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  /// short code สำหรับ public URL /r/[code]
+  code           String   @unique
+  /// ผูกกับสินค้า (ถ้า null = ลิงก์ระดับร้าน)
+  productId      String?
+  shopId         String?
+  label          String?
+  /// override อัตราคอมมิชชั่น; null = ใช้ defaultCommissionBps ของ creator
+  commissionBps  Int?
+  clickCount     Int      @default(0)
+  conversionCount Int     @default(0)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  clicks       AffiliateClick[]
+  attributions AffiliateAttribution[]
+
+  @@index([creatorId, createdAt])
+  @@index([productId])
+  @@index([shopId])
+  @@map("creator_links")
+}
+
+/// บันทึก click — สำหรับ analytics
+model AffiliateClick {
+  id        String   @id @default(cuid())
+  linkId    String
+  link      CreatorLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  /// hash ของ IP+UA — ใช้นับ unique อย่างหยาบ ๆ
+  fingerprint String?
+  ua          String?
+  refererUrl  String?
+  createdAt DateTime @default(now())
+
+  @@index([linkId, createdAt])
+  @@map("affiliate_clicks")
+}
+
+/// การ attribute ของ order → link → creator (1 order = 1 attribution)
+model AffiliateAttribution {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  linkId          String
+  link            CreatorLink @relation(fields: [linkId], references: [id])
+  creatorId       String
+  shopId          String
+  productId       String?
+  /// snapshot อัตราคอมมิชชั่นตอน checkout
+  commissionBps   Int
+  /// commission ที่คำนวณตอน checkout (= subtotal * bps / 10000)
+  commissionCents Int
+  /// "PENDING" | "RELEASED" | "REVERSED"
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  releasedAt      DateTime?
+
+  @@index([creatorId, status])
+  @@index([linkId, status])
+  @@map("affiliate_attributions")
+}
+
+// =============================================================================
+// Phase 4 — NP Local Commerce
+// =============================================================================
+
+/// โปรไฟล์ร้านท้องถิ่น (1-to-1 กับ Shop)
+model LocalStore {
+  id                String   @id @default(cuid())
+  shopId            String   @unique
+  /// "RESTAURANT" | "CAFE" | "GROCERY" | "FRESH_MARKET" | "LOCAL_GOODS" | "SERVICE"
+  kind              String   @default("LOCAL_GOODS")
+  lat               Float
+  lng               Float
+  addressText       String
+  /// รัศมีจัดส่ง (กม.)
+  deliveryRadiusKm  Float    @default(5)
+  pickupEnabled     Boolean  @default(true)
+  deliveryEnabled   Boolean  @default(true)
+  /// เวลาเตรียมของก่อนจัดส่ง/ให้รับ (นาที)
+  prepTimeMinutes   Int      @default(20)
+  /// JSON: { mon: [{open:"08:00",close:"21:00"}], tue: [...], ... }
+  openHoursJson     String   @default("{}")
+  active            Boolean  @default(true)
+  /// ค่าจัดส่งฐาน (cents) สำหรับ delivery ในรัศมี
+  baseDeliveryCents Int      @default(3500)
+  /// ค่าจัดส่งต่อกิโลเมตรเพิ่ม
+  perKmCents        Int      @default(800)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([active])
+  @@map("local_stores")
+}
+
+/// หมวดเมนู (สำหรับร้านอาหาร/คาเฟ่)
+model MenuCategory {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  items MenuItemMap[]
+
+  @@index([shopId, sort])
+  @@map("menu_categories")
+}
+
+/// แมป product → menu_category (1 product อยู่ได้หลายหมวด)
+model MenuItemMap {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  productId  String
+  sort       Int      @default(0)
+
+  @@unique([categoryId, productId])
+  @@index([productId])
+  @@map("menu_item_maps")
+}
+
+/// time slot สำหรับรับเอง/ให้ส่ง
+model TimeSlot {
+  id        String   @id @default(cuid())
+  shopId    String
+  /// "PICKUP" | "DELIVERY"
+  kind      String
+  startsAt  DateTime
+  endsAt    DateTime
+  /// จำนวนออเดอร์รับได้ในช่วงนี้
+  capacity  Int      @default(5)
+  taken     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([shopId, kind, startsAt])
+  @@map("time_slots")
+}
+
+/// rider profile (ทุก user เป็น rider ได้)
+model Rider {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  /// "BIKE" | "MOTORCYCLE" | "CAR"
+  vehicle   String   @default("MOTORCYCLE")
+  /// "PENDING" | "ACTIVE" | "SUSPENDED"
+  status    String   @default("ACTIVE")
+  /// "OFFLINE" | "AVAILABLE" | "BUSY"
+  online    String   @default("OFFLINE")
+  lat       Float?
+  lng       Float?
+  totalDeliveries Int  @default(0)
+  totalEarningsCents Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs DeliveryJob[]
+
+  @@index([status, online])
+  @@map("riders")
+}
+
+/// งานส่งของ — สร้างเมื่อ Order PAID + carrier เป็น EXPRESS_LOCAL
+model DeliveryJob {
+  id           String   @id @default(cuid())
+  orderId      String   @unique
+  riderId      String?
+  rider        Rider?   @relation(fields: [riderId], references: [id])
+  /// "REQUESTED" | "ASSIGNED" | "PICKED_UP" | "DELIVERED" | "FAILED" | "CANCELLED"
+  status       String   @default("REQUESTED")
+  /// ที่อยู่ร้าน (pickup)
+  pickupLat    Float
+  pickupLng    Float
+  pickupText   String
+  /// ที่อยู่ลูกค้า (drop)
+  dropLat      Float
+  dropLng      Float
+  dropText     String
+  distanceKm   Float    @default(0)
+  /// ค่าตอบแทนผู้ขับ (cents) — ส่วนนี้แยกจาก escrow ของ shop ในเฟสนี้
+  riderFeeCents Int     @default(0)
+  /// notes ระหว่างทาง
+  noteJson     String   @default("[]")
+  assignedAt   DateTime?
+  pickedUpAt   DateTime?
+  deliveredAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([riderId, status])
+  @@map("delivery_jobs")
+}
+
+// =============================================================================
+// Phase 5 — NP Marketing Engine
+// =============================================================================
+
+/// คูปองส่วนลด (เป็นของแพลตฟอร์ม หรือ ของร้าน)
+model Coupon {
+  id            String   @id @default(cuid())
+  /// null = คูปองของแพลตฟอร์ม, มี shopId = คูปองของร้าน
+  shopId        String?
+  code          String   @unique
+  title         String
+  description   String?
+  /// "PERCENT" | "FIXED" | "FREE_SHIPPING"
+  kind          String   @default("PERCENT")
+  /// PERCENT: 1-10000 (basis points: 1000 = 10%)
+  /// FIXED: cents
+  /// FREE_SHIPPING: ignored (= ส่งฟรี)
+  value         Int      @default(0)
+  /// ยอดขั้นต่ำต่อออเดอร์ (cents) ถึงจะใช้คูปองได้
+  minSpendCents Int      @default(0)
+  /// ส่วนลดสูงสุด (cents) — สำหรับ PERCENT
+  maxDiscountCents Int   @default(0)
+  /// จำนวนการใช้รวมทั้งหมด (0 = ไม่จำกัด)
+  totalLimit    Int      @default(0)
+  /// จำนวนการใช้ต่อคน (0 = ไม่จำกัด)
+  perUserLimit  Int      @default(1)
+  used          Int      @default(0)
+  startsAt      DateTime @default(now())
+  endsAt        DateTime?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  redemptions CouponRedemption[]
+
+  @@index([shopId, active])
+  @@index([code])
+  @@map("coupons")
+}
+
+/// บันทึกการใช้คูปอง (ผูกกับ order)
+model CouponRedemption {
+  id             String   @id @default(cuid())
+  couponId       String
+  coupon         Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId         String
+  orderId        String?
+  discountCents  Int
+  createdAt      DateTime @default(now())
+
+  @@unique([couponId, orderId])
+  @@index([couponId, userId])
+  @@index([userId])
+  @@map("coupon_redemptions")
+}
+
+/// บัญชี Loyalty point ต่อ user (1 user มี 1 บัญชี)
+model LoyaltyAccount {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  /// แต้มคงเหลือ
+  points      Int      @default(0)
+  /// แต้มสะสมตลอดชีพ (สำหรับคำนวณ tier)
+  lifetimePoints Int   @default(0)
+  /// "BRONZE" | "SILVER" | "GOLD" | "PLATINUM"
+  tier        String   @default("BRONZE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries LoyaltyEntry[]
+
+  @@map("loyalty_accounts")
+}
+
+/// รายการเดินบัญชี loyalty
+model LoyaltyEntry {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// "EARN" | "REDEEM" | "EXPIRE" | "REVERSE" | "ADJUST"
+  kind        String
+  points      Int
+  /// อ้างอิง order / coupon / referral
+  refType     String?
+  refId       String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([refType, refId])
+  @@map("loyalty_entries")
+}
+
+/// ระบบ Referral (ลูกค้าชวนลูกค้า)
+model Referral {
+  id          String   @id @default(cuid())
+  /// คนชวน
+  inviterId   String
+  /// รหัสที่ใช้ผูกกับ link เช่น "ABC123"
+  code        String   @unique
+  /// แต้มที่ inviter จะได้เมื่อมีคนรับ
+  rewardPoints Int     @default(50)
+  /// แต้มที่ invitee (คนรับเชิญ) จะได้เมื่อสมัครสำเร็จ
+  inviteeRewardPoints Int @default(50)
+  uses        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  claims ReferralClaim[]
+
+  @@index([inviterId])
+  @@map("referrals")
+}
+
+/// บันทึกการกินรหัส referral
+model ReferralClaim {
+  id          String   @id @default(cuid())
+  referralId  String
+  referral    Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  inviteeId   String
+  /// "PENDING" | "REWARDED" | "REVERSED"
+  status      String   @default("PENDING")
+  rewardedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([referralId, inviteeId])
+  @@index([inviteeId])
+  @@map("referral_claims")
+}
+
+/// แคมเปญ Flash Deal / Boost Product
+model Campaign {
+  id          String   @id @default(cuid())
+  shopId      String?
+  /// "FLASH_DEAL" | "BOOST" | "BANNER"
+  kind        String   @default("FLASH_DEAL")
+  title       String
+  description String?
+  /// สำหรับ FLASH_DEAL: ส่วนลด basis points (1000 = 10%) ทับสินค้าที่ join
+  /// สำหรับ BOOST: ค่าใช้จ่ายต่อวัน (cents)
+  /// สำหรับ BANNER: ignored
+  value       Int      @default(0)
+  /// JSON: { productIds: [...], priority: 100 }
+  metaJson    String   @default("{}")
+  bannerUrl   String?
+  startsAt    DateTime
+  endsAt      DateTime
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kind, active, startsAt])
+  @@index([shopId, active])
+  @@map("campaigns")
+}
+
+/// สินค้าที่อยู่ใน flash deal / boost
+model CampaignProduct {
+  id          String   @id @default(cuid())
+  campaignId  String
+  productId   String
+  /// override ราคา (cents) — null = ใช้ส่วนลดจาก campaign.value
+  flashPriceCents Int?
+  stockCap    Int      @default(0)
+  sold        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([campaignId, productId])
+  @@index([productId])
+  @@map("campaign_products")
+}
+
+/// คลิปสั้น Short Video Feed (TikTok-like)
+model VideoPost {
+  id          String   @id @default(cuid())
+  authorId    String
+  /// ผูกสินค้า (optional) — null = โพสต์ทั่วไป
+  productId   String?
+  shopId      String?
+  videoUrl    String
+  thumbUrl    String?
+  caption     String   @default("")
+  /// JSON tags ["#food","#flash"]
+  tagsJson    String   @default("[]")
+  likes       Int      @default(0)
+  views       Int      @default(0)
+  comments    Int      @default(0)
+  /// "ACTIVE" | "HIDDEN" | "DELETED"
+  status      String   @default("ACTIVE")
+  /// คะแนนความนิยม (สำหรับ feed ranking)
+  score       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reactions VideoReaction[]
+
+  @@index([status, score])
+  @@index([authorId, createdAt])
+  @@index([productId])
+  @@map("video_posts")
+}
+
+/// like ของผู้ใช้ต่อคลิป (รองรับ unlike)
+model VideoReaction {
+  id          String   @id @default(cuid())
+  videoId     String
+  video       VideoPost @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  userId      String
+  /// "LIKE" | "DISLIKE"
+  kind        String   @default("LIKE")
+  createdAt   DateTime @default(now())
+
+  @@unique([videoId, userId])
+  @@index([userId])
+  @@map("video_reactions")
+}
+
+/// Broadcast — ส่งข้อความถึงลูกค้า (LINE OA / push / in-app)
+model Broadcast {
+  id          String   @id @default(cuid())
+  shopId      String?
+  /// "PUSH" | "INAPP" | "LINE" | "EMAIL"
+  channel     String   @default("INAPP")
+  title       String
+  body        String
+  /// "ALL" | "BUYERS" | "ABANDONED_CART" | "WIN_BACK" | "VIP"
+  audience    String   @default("ALL")
+  /// "DRAFT" | "QUEUED" | "SENT" | "FAILED"
+  status      String   @default("DRAFT")
+  sentCount   Int      @default(0)
+  failedCount Int      @default(0)
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shopId, status])
+  @@index([status, scheduledAt])
+  @@map("broadcasts")
+}
+
+/// ข้อความที่ส่งให้ user (สำหรับ inapp + history)
+model InAppMessage {
+  id          String   @id @default(cuid())
+  userId      String
+  broadcastId String?
+  title       String
+  body        String
+  /// JSON link/cta
+  ctaJson     String   @default("{}")
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+  @@map("inapp_messages")
+}
