@@ -216,7 +216,30 @@ async function bootstrap(): Promise<void> {
   const { ThrottleGuard } = await import('./common/throttle/throttler');
   app.useGlobalGuards(new ThrottleGuard(reflector ?? new Reflector()));
 
-  const port = Number(process.env.API_PORT ?? 3001);
+  // Port resolution priority:
+  //   1. PORT             — Railway / Heroku / Fly / Render / Vercel
+  //                         platform-injected variable. ALL of them set
+  //                         this; the app must honour it or healthchecks
+  //                         hitting the platform-allocated port fail.
+  //   2. API_PORT         — legacy local-dev variable we used before any
+  //                         hosting (kept so existing .env files still
+  //                         work without changes).
+  //   3. 3001             — last-resort default for `pnpm dev` with no
+  //                         env file at all.
+  //
+  // Number(undefined) is NaN, Number('') is 0, and Number('${{ PORT }}')
+  // is also NaN — all three would cause `app.listen(NaN, ...)` to bind a
+  // random port. Guard against that explicitly: if the parsed value is
+  // not a finite integer, fall through to the next source.
+  const parsePort = (raw: string | undefined): number | null => {
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 && n < 65536 ? n : null;
+  };
+  const port =
+    parsePort(process.env.PORT) ??
+    parsePort(process.env.API_PORT) ??
+    3001;
   await app.listen(port, '0.0.0.0');
 
   const url = await app.getUrl();
