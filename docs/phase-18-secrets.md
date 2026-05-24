@@ -1,0 +1,113 @@
+# Phase 18 — Mobile CI Secrets Reference
+
+> ทุก secret ลงทะเบียนใน **GitHub Settings → Secrets and variables → Actions**
+> และผูกกับ **Environment** เพื่อบังคับ manual approval ก่อน deploy
+>
+> ห้าม commit ค่า secret ลง repo เด็ดขาด
+
+---
+
+## 1) Apple App Store Connect (iOS)
+
+| Secret                          | คำอธิบาย                                                                 | ที่มา                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `APPLE_API_KEY_ID`              | Key ID 10-char                                                           | App Store Connect → Users and Access → Integrations → API Keys                 |
+| `APPLE_API_KEY_ISSUER_ID`       | UUID ของ issuer                                                          | หน้าเดียวกัน → "Issuer ID" บนหัวตาราง                                          |
+| `APPLE_API_KEY_CONTENT`         | base64-encoded ของไฟล์ `.p8`                                             | `cat AuthKey_XXXX.p8 \| base64 \| pbcopy`                                      |
+| `APPLE_TEAM_ID`                 | 10-char team id                                                          | developer.apple.com → Membership                                               |
+| `APPLE_BUNDLE_ID`               | `app.np.commerce`                                                        | -                                                                              |
+| `APPLE_ID`                      | (optional) email Apple ID                                                | สำหรับ fastlane match ถ้าจำเป็น                                                |
+
+## 2) Fastlane Match (private cert repo)
+
+| Secret                            | คำอธิบาย                                              | ที่มา                                  |
+| --------------------------------- | ----------------------------------------------------- | -------------------------------------- |
+| `MATCH_GIT_URL`                   | git ssh URL ของ certs repo                            | `git@github.com:np-commerce/ios-certificates.git` |
+| `MATCH_GIT_BASIC_AUTHORIZATION`   | `base64("user:pat")` (ใช้แทน SSH ใน CI)               | สร้าง PAT scope `repo` ของ bot user      |
+| `MATCH_PASSWORD`                  | Passphrase สำหรับ decrypt match repo                  | สร้างเอง (32+ chars)                   |
+
+## 3) Google Play Console (Android)
+
+| Secret                            | คำอธิบาย                                                       | ที่มา                                                                       |
+| --------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `ANDROID_PACKAGE_NAME`            | `app.np.commerce`                                              | -                                                                           |
+| `ANDROID_KEYSTORE_BASE64`         | base64 ของ release.keystore                                    | `keytool -genkeypair ...` → `base64 release.keystore \| pbcopy`             |
+| `ANDROID_KEYSTORE_PASSWORD`       | password ของ keystore                                          | -                                                                           |
+| `ANDROID_KEY_ALIAS`               | alias key (เช่น `np-release`)                                  | -                                                                           |
+| `ANDROID_KEY_PASSWORD`            | password ของ alias                                             | -                                                                           |
+| `PLAY_SERVICE_ACCOUNT_JSON`       | JSON เนื้อหาเต็ม                                               | GCP → IAM & Admin → Service Accounts → ใส่ role `Release Manager` ผ่าน Play |
+
+> **เคล็ดลับ**: Keystore สูญหาย = ไม่สามารถ update แอปได้ตลอดชีวิต (Google
+> ไม่ allow re-sign) — เก็บสำเนาใน 1Password + offline USB
+
+## 4) Sentry (crash + perf observability)
+
+| Secret                            | คำอธิบาย                              | ที่มา                                            |
+| --------------------------------- | ------------------------------------- | ------------------------------------------------ |
+| `SENTRY_AUTH_TOKEN`               | Internal Integration token            | sentry.io → Settings → Account → API → Auth Tokens (scope: `project:releases`, `project:write`, `org:read`) |
+| `SENTRY_ORG`                      | org slug (เช่น `np-commerce`)         | -                                                |
+| `SENTRY_PROJECT_NATIVE_IOS`       | project slug (เช่น `np-commerce-ios`) | -                                                |
+| `SENTRY_PROJECT_NATIVE_ANDROID`   | project slug                          | -                                                |
+| `SENTRY_PROJECT_WEB`              | project slug ของ web                  | สร้างไว้ตั้งแต่ Phase 13.1                       |
+| `NEXT_PUBLIC_SENTRY_DSN`          | DSN public (มี protocol-keyed value)  | sentry.io → Projects → Client Keys (DSN)         |
+
+## 5) Live Updates (OTA)
+
+| Secret                            | คำอธิบาย                                                            |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`               | IAM user ที่มี `s3:PutObject` บน bucket OTA                          |
+| `AWS_SECRET_ACCESS_KEY`           | -                                                                   |
+| `AWS_REGION`                      | `ap-southeast-1`                                                    |
+| `LIVE_UPDATES_S3_BUCKET`          | เช่น `np-app-live-updates`                                          |
+| `LIVE_UPDATES_CDN_BASE`           | CloudFront URL `https://cdn.np.app/bundles`                         |
+| `API_DEPLOY_HOOK_URL`             | webhook ของ API server (Vercel/Railway) สำหรับ bump env vars        |
+| `API_DEPLOY_HOOK_SECRET`          | HMAC secret 32 chars                                                |
+| `API_URL`                         | เช่น `https://api.np.app` (สำหรับ smoke test manifest)              |
+
+## 6) Other
+
+| Secret                            | คำอธิบาย                                       |
+| --------------------------------- | ---------------------------------------------- |
+| `IONIC_TOKEN`                     | (เลิกใช้ — เราใช้ self-host แทน Ionic Appflow) |
+
+---
+
+## รูปแบบ Environment ใน GitHub
+
+สร้าง 3 environments:
+
+1. `ios-production`        — บังคับ "Required reviewers" 1 คน ก่อน workflow รันบน `mobile-ios`
+2. `android-production`    — เหมือนกันสำหรับ `mobile-android`
+3. `ota-production`        — สำหรับ live-update channel = production (ต้อง approve)
+4. `ota-beta`              — ไม่ต้อง approve (rollout เร็ว)
+
+แต่ละ env ผูก secrets ของตัวเองได้ (override ที่ repo-level ได้)
+
+---
+
+## วิธี rotate
+
+| Secret                          | ความถี่      | วิธี                                                          |
+| ------------------------------- | ----------- | ------------------------------------------------------------- |
+| `APPLE_API_KEY_*`               | 1 ปี / ครั้ง | Revoke ใน App Store Connect แล้วสร้างใหม่                     |
+| `PLAY_SERVICE_ACCOUNT_JSON`     | 90 วัน      | GCP IAM → service account → Keys → delete old, add new        |
+| `MATCH_PASSWORD`                | ทุกปี        | `match nuke + match init` ใหม่ (sync devs ทุกคน)              |
+| Keystore                        | ห้ามเปลี่ยน  | ใช้ตลอดอายุของแอป                                              |
+| `SENTRY_AUTH_TOKEN`             | 6 เดือน      | สร้างใหม่ → revoke เก่า                                       |
+| `API_DEPLOY_HOOK_SECRET`        | 3 เดือน      | rotate ทั้งฝั่ง API + workflow                                |
+
+---
+
+## Pre-flight checklist (ก่อนรัน CI ครั้งแรก)
+
+- [ ] Apple Developer Program จ่ายค่า annual ($99/y) แล้ว
+- [ ] Bundle ID `app.np.commerce` registered (App Store Connect → Identifiers)
+- [ ] App record บน App Store Connect (สถานะ "Prepare for Submission")
+- [ ] Match repo สร้างแล้ว + push first cert + first profile
+- [ ] Google Play Console จ่าย $25 one-time แล้ว
+- [ ] App record ใน Play Console + Internal Testing track เปิดแล้ว
+- [ ] First AAB upload ผ่าน manual แล้ว (Play Console ต้อง draft ครั้งแรก)
+- [ ] Service account ถูก link จาก Play Console → Users → Add new user (`Release Manager`)
+- [ ] Sentry projects 2 ตัว (ios + android) + DSN copy ลง `NEXT_PUBLIC_SENTRY_DSN`
+- [ ] S3 bucket + CloudFront distribution พร้อม (OTA bundle URL คงที่)
+- [ ] API host รับ webhook bump env vars แล้ว (เขียนเอง หรือใช้ Vercel envs API)

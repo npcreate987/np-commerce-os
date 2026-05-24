@@ -114,13 +114,25 @@ pnpm build:web     # build PWA
 - Safari (iOS): กด Share → "Add to Home Screen"
 - ลูกค้าจะมี icon บนหน้าจอเหมือนแอปจริง
 
-### 6. Build native APK/IPA (ใช้เมื่อจำเป็น)
-> ต้องเพิ่ม Capacitor ก่อน — ทำใน Phase 2+
+### 6. Build native APK/IPA (Phase 15 ✅ พร้อมแล้ว)
 
 ```bash
-pnpm mobile:android   # → สร้าง APK
-pnpm mobile:ios       # → สร้าง IPA (ต้องมี Mac + Xcode)
+cd apps/web
+BUILD_STATIC=true pnpm build && pnpm cap:sync
+pnpm cap:open:ios        # → Xcode (Cmd-R เปิด simulator)
+pnpm cap:open:android    # → Android Studio (Run)
 ```
+
+อัปเดต logo / splash:
+```bash
+# แทน apps/web/resources/{logo,splash}.svg แล้วรัน:
+pnpm assets:build         # render + generate 100+ resolutions
+pnpm cap:sync             # copy เข้า ios/android projects
+```
+
+ดูคู่มือเต็ม (live reload, store submission, troubleshooting):
+[`docs/phase-15-mobile.md`](./docs/phase-15-mobile.md) ·
+[`docs/mobile-access.md`](./docs/mobile-access.md)
 
 ---
 

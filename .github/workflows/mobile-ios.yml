@@ -1,0 +1,142 @@
+name: mobile-ios
+
+# Phase 18 — Mobile iOS pipeline (TestFlight beta lane).
+#
+# เมื่อ trigger:
+#   - push tag `mobile-v*` (semver) → build + upload TestFlight
+#   - manual `workflow_dispatch` → ใช้ test signing / debug
+#
+# Flow:
+#   1) checkout
+#   2) setup Node 20 + pnpm + cache
+#   3) `pnpm install --frozen-lockfile`
+#   4) `BUILD_STATIC=true pnpm --filter web build`
+#   5) `pnpm --filter web cap sync ios`
+#   6) Fastlane `ios beta`  → Match certs + Gym build + Pilot upload
+#   7) Fastlane อัปโหลด dSYM ไป Sentry (release tag = appId@version+build)
+#   8) Sentry release create + assoc commits
+#
+# Secrets (Settings → Secrets → Actions):
+#   APPLE_API_KEY_ID
+#   APPLE_API_KEY_ISSUER_ID
+#   APPLE_API_KEY_CONTENT          # base64 .p8
+#   MATCH_GIT_BASIC_AUTHORIZATION  # base64("user:pat")
+#   MATCH_PASSWORD                 # decryption phrase
+#   APPLE_TEAM_ID
+#   APPLE_BUNDLE_ID                # app.np.commerce
+#   SENTRY_AUTH_TOKEN
+#   SENTRY_ORG                     # np-commerce
+#   SENTRY_PROJECT_NATIVE_IOS      # np-commerce-ios
+#   IONIC_TOKEN                    # optional, for live-updates SDK
+#
+# ทุก secret ตั้งเป็น "Repository secret" + restrict environment "ios-production"
+# เพื่อให้ต้อง approve manual ก่อน deploy
+
+on:
+  push:
+    tags:
+      - 'mobile-v*'
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: 'Fastlane lane (beta | release)'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - release
+
+concurrency:
+  group: mobile-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build + TestFlight upload
+    runs-on: macos-14
+    environment:
+      name: ios-production
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Ruby (Fastlane + CocoaPods)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: apps/web/ios
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve build number
+        id: meta
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          VERSION=$(node -p "require('./apps/web/package.json').version || '1.0.0'")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "release=app.np.commerce@${VERSION}+${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Build web bundle (static export)
+        env:
+          BUILD_STATIC: 'true'
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.meta.outputs.version }}
+          NEXT_PUBLIC_APP_BUILD: ${{ steps.meta.outputs.build }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: production
+          NEXT_PUBLIC_SENTRY_RELEASE: ${{ steps.meta.outputs.release }}
+        run: pnpm --filter web build
+
+      - name: Capacitor sync
+        run: pnpm --filter web exec cap sync ios
+
+      - name: Install Pods
+        working-directory: apps/web/ios/App
+        run: pod install --repo-update
+
+      - name: Fastlane beta
+        working-directory: apps/web/ios
+        env:
+          LANE: ${{ inputs.lane || 'beta' }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_KEY_ISSUER_ID }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_BUNDLE_ID: ${{ secrets.APPLE_BUNDLE_ID }}
+          BUILD_NUMBER: ${{ steps.meta.outputs.build }}
+          VERSION_NUMBER: ${{ steps.meta.outputs.version }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_NATIVE_IOS }}
+          SENTRY_RELEASE: ${{ steps.meta.outputs.release }}
+        run: bundle exec fastlane $LANE
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-build-${{ steps.meta.outputs.build }}
+          path: |
+            apps/web/ios/build/*.ipa
+            apps/web/ios/build/*.app.dSYM.zip
+          retention-days: 14

@@ -1,0 +1,14 @@
+# iOS — Fastlane Appfile
+#
+# Read in environment-injected values from GitHub Actions; locally Fastlane
+# will fall back to interactive prompts (handy for first-time dev).
+
+apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
+app_identifier(ENV["APPLE_BUNDLE_ID"] || "app.np.commerce")
+
+# Use App Store Connect API key (preferred over user/password):
+# Set these in GH Actions secrets:
+#   APPLE_API_KEY_ID
+#   APPLE_API_KEY_ISSUER_ID
+#   APPLE_API_KEY_CONTENT  (base64 of the .p8 file)

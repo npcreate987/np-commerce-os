@@ -35,6 +35,8 @@ import { TasteModule } from './modules/taste/taste.module';
 import { ProactiveModule } from './modules/proactive/proactive.module';
 import { HealthController } from './common/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
+import { AppVersionController } from './common/app-version.controller';
+import { LiveUpdatesController } from './common/live-updates.controller';
 
 @Module({
   imports: [
@@ -73,6 +75,11 @@ import { MetricsController } from './common/observability/metrics.controller';
     TasteModule,
     ProactiveModule,
   ],
-  controllers: [HealthController, MetricsController],
+  controllers: [
+    HealthController,
+    MetricsController,
+    AppVersionController,
+    LiveUpdatesController,
+  ],
 })
 export class AppModule {}

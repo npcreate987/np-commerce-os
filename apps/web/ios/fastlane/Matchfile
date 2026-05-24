@@ -1,0 +1,23 @@
+# iOS — Fastlane Matchfile
+#
+# `match` keeps signing certs + provisioning profiles in a private git repo,
+# encrypted with `MATCH_PASSWORD`. Every CI runner pulls + decrypts at build
+# time — no shared file shuffle, no expired-profile drama.
+#
+# Setup once locally:
+#   cd apps/web/ios
+#   bundle install
+#   bundle exec fastlane match init      # creates the repo + first push
+#   bundle exec fastlane match appstore  # generates first cert + profile
+#
+# Read the generated cert/profile names back into ENV vars for GH Actions:
+#   echo $MATCH_GIT_URL                  # ssh://...
+#   echo $MATCH_PASSWORD                 # decryption passphrase
+
+git_url(ENV["MATCH_GIT_URL"] || "git@github.com:np-commerce/ios-certificates.git")
+storage_mode("git")
+type("appstore")        # appstore | adhoc | development | enterprise
+app_identifier([ENV["APPLE_BUNDLE_ID"] || "app.np.commerce"])
+username(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
+readonly(true)          # CI never creates new certs — only consumes existing ones

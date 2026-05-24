@@ -1,0 +1,6 @@
+# Android — Fastlane Appfile
+#
+# Reads ENV-injected values from GitHub Actions.
+
+json_key_file(ENV["PLAY_SERVICE_ACCOUNT_JSON_PATH"] || "fastlane/play-service-account.json")
+package_name(ENV["ANDROID_PACKAGE_NAME"] || "app.np.commerce")

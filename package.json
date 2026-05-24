@@ -31,5 +31,13 @@
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
     "prettier": "^3.2.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@sentry/react": "10.43.0",
+      "@sentry/browser": "10.43.0",
+      "@sentry/core": "10.43.0",
+      "@sentry/types": "10.43.0"
+    }
   }
 }

@@ -1,0 +1,147 @@
+# Phase 18 — Fastlane Fastfile (Android).
+#
+# Lanes:
+#   android internal    — Play Internal Testing track (≤100 testers, instant)
+#   android alpha       — Closed Testing alpha
+#   android beta        — Closed Testing beta (public link)
+#   android production  — Phased rollout to production
+#
+# Each lane:
+#   1) Bump versionCode = GITHUB_RUN_NUMBER
+#   2) `gradle bundleRelease` produces app-release.aab
+#   3) Upload ProGuard `mapping.txt` → Sentry release
+#   4) `supply` uploads the AAB to the chosen Play track
+#
+# Invoke from CI:
+#   bundle exec fastlane internal
+
+default_platform(:android)
+
+GRADLE_TASK_BUNDLE  = "bundleRelease"
+APP_MODULE_DIR      = "app"
+AAB_PATH            = "app/build/outputs/bundle/release/app-release.aab"
+MAPPING_PATH        = "app/build/outputs/mapping/release/mapping.txt"
+
+platform :android do
+
+  before_all do |lane, options|
+    setup_ci if ENV["CI"]
+  end
+
+  desc "Stamp versionCode + versionName into gradle.properties"
+  private_lane :stamp_version do
+    version_code = (ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H").to_i).to_i
+    version_name = ENV["VERSION_NUMBER"] || "1.0.0"
+
+    # Write into gradle.properties so build.gradle can read it. Capacitor's
+    # default gradle template references `versionCode` + `versionName` from
+    # variables; we keep the same convention.
+    ::File.open("gradle.properties.local", "w") do |f|
+      f.puts "VERSION_CODE=#{version_code}"
+      f.puts "VERSION_NAME=#{version_name}"
+    end
+    ENV["ORG_GRADLE_PROJECT_VERSION_CODE"] = version_code.to_s
+    ENV["ORG_GRADLE_PROJECT_VERSION_NAME"] = version_name
+
+    UI.message("📦 #{version_name} (#{version_code})")
+  end
+
+  desc "Build signed AAB"
+  private_lane :build_aab do
+    gradle(
+      task: GRADLE_TASK_BUNDLE,
+      properties: {
+        "android.injected.signing.store.file"     => "#{APP_MODULE_DIR}/release.keystore",
+        "android.injected.signing.store.password" => ENV["ANDROID_KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias"      => ENV["ANDROID_KEY_ALIAS"],
+        "android.injected.signing.key.password"   => ENV["ANDROID_KEY_PASSWORD"],
+      },
+    )
+  end
+
+  desc "Upload ProGuard mapping + create Sentry release"
+  private_lane :upload_mapping do
+    next unless ENV["SENTRY_AUTH_TOKEN"]
+    next unless File.exist?(MAPPING_PATH)
+    sentry_upload_proguard(
+      auth_token: ENV["SENTRY_AUTH_TOKEN"],
+      org_slug: ENV["SENTRY_ORG"],
+      project_slug: ENV["SENTRY_PROJECT"],
+      mapping_paths: [MAPPING_PATH],
+      android_manifest_path: "#{APP_MODULE_DIR}/src/main/AndroidManifest.xml",
+    )
+    if ENV["SENTRY_RELEASE"]
+      sentry_create_release(
+        auth_token: ENV["SENTRY_AUTH_TOKEN"],
+        org_slug: ENV["SENTRY_ORG"],
+        project_slug: ENV["SENTRY_PROJECT"],
+        version: ENV["SENTRY_RELEASE"],
+        finalize: true,
+      )
+    end
+  end
+
+  desc "🧪 Upload to Internal Testing track"
+  lane :internal do
+    stamp_version
+    build_aab
+    upload_mapping
+    supply(
+      track: "internal",
+      aab: AAB_PATH,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: false,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "draft",
+    )
+  end
+
+  desc "🅰️ Closed alpha"
+  lane :alpha do
+    stamp_version
+    build_aab
+    upload_mapping
+    supply(
+      track: "alpha",
+      aab: AAB_PATH,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      release_status: "draft",
+    )
+  end
+
+  desc "🅱️ Closed beta"
+  lane :beta do
+    stamp_version
+    build_aab
+    upload_mapping
+    supply(
+      track: "beta",
+      aab: AAB_PATH,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      release_status: "draft",
+    )
+  end
+
+  desc "🏪 Production (phased rollout)"
+  lane :production do
+    stamp_version
+    build_aab
+    upload_mapping
+    supply(
+      track: "production",
+      aab: AAB_PATH,
+      skip_upload_apk: true,
+      skip_upload_metadata: false,
+      rollout: ENV["ROLLOUT_PCT"] || "0.1",
+      release_status: "inProgress",
+    )
+  end
+
+  error do |lane, exception|
+    UI.error("❌ Lane #{lane} failed: #{exception.message}")
+  end
+end

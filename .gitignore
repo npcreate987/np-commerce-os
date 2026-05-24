@@ -23,6 +23,9 @@ out/
 .env.local
 .env.*.local
 *.env
+# Sentry wizard generates this; contains SENTRY_AUTH_TOKEN
+.env.sentry-build-plugin
+apps/*/.env.sentry-build-plugin
 
 # Editor
 .vscode/*
@@ -49,10 +52,32 @@ coverage/
 playwright-report/
 test-results/
 
-# Capacitor (เมื่อมี)
-android/
-ios/
-!apps/web/capacitor.config.ts
+# Capacitor — commit ios/ และ android/ project folders แต่ ignore generated artefacts
+# iOS
+apps/web/ios/App/Pods/
+apps/web/ios/App/Podfile.lock
+apps/web/ios/.gradle/
+apps/web/ios/App/build/
+apps/web/ios/App/App/public/
+apps/web/ios/DerivedData/
+apps/web/ios/App/output/
+apps/web/ios/App/App.xcworkspace/xcuserdata/
+apps/web/ios/App/App.xcodeproj/xcuserdata/
+apps/web/ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Android
+apps/web/android/.gradle/
+apps/web/android/build/
+apps/web/android/app/build/
+apps/web/android/app/release/
+apps/web/android/app/src/main/assets/public/
+apps/web/android/local.properties
+apps/web/android/captures/
+apps/web/android/.idea/
+apps/web/android/app/release/output-metadata.json
+*.jks
+*.keystore
+!apps/web/android/app/debug.keystore
 
 # DB
 *.sqlite

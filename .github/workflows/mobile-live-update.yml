@@ -1,0 +1,166 @@
+name: mobile-live-update
+
+# Phase 18 — Capacitor Live Updates (OTA) publisher.
+#
+# Trigger: push tag `live-v*` หรือ manual dispatch.
+# Output: zip ของ `apps/web/out/` + sha256 → upload S3 + update manifest env vars.
+#
+# Flow:
+#   1) Build static export (Next.js)
+#   2) Hash + zip → `web-bundle-<sha>.zip`
+#   3) Upload S3 (versioned bucket, immutable URL)
+#   4) PATCH manifest env vars บน API host (LIVE_UPDATES_*)
+#   5) Smoke test: hit `/v1/app/live-updates/manifest` แล้วยืนยันค่า
+#
+# Secrets:
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+#   AWS_REGION                     # ap-southeast-1
+#   LIVE_UPDATES_S3_BUCKET         # np-app-live-updates
+#   LIVE_UPDATES_CDN_BASE          # https://cdn.np.app/bundles
+#   API_DEPLOY_HOOK_URL            # webhook to bump env vars on API host
+#   API_DEPLOY_HOOK_SECRET         # HMAC secret
+#   SENTRY_AUTH_TOKEN
+#   SENTRY_ORG
+#   SENTRY_PROJECT_WEB             # np-commerce-web (already used by Phase 13.1)
+
+on:
+  push:
+    tags:
+      - 'live-v*'
+  workflow_dispatch:
+    inputs:
+      rollout_pct:
+        description: 'Production rollout percentage (0-100)'
+        required: true
+        default: '10'
+      channel:
+        description: 'Channel (production | beta)'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - production
+          - beta
+
+concurrency:
+  group: mobile-live-update
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish OTA bundle
+    runs-on: ubuntu-22.04
+    environment:
+      name: ota-${{ inputs.channel || 'beta' }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve build id
+        id: meta
+        run: |
+          SHORT_SHA=$(git rev-parse --short=10 HEAD)
+          VERSION=$(node -p "require('./apps/web/package.json').version || '1.0.0'")
+          BUILD_ID="${VERSION}-${SHORT_SHA}"
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Build static export
+        env:
+          BUILD_STATIC: 'true'
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.meta.outputs.version }}
+          NEXT_PUBLIC_APP_BUILD: ${{ steps.meta.outputs.short_sha }}
+          NEXT_PUBLIC_SENTRY_RELEASE: live-${{ steps.meta.outputs.build_id }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+        run: pnpm --filter web build
+
+      - name: Package bundle
+        id: pkg
+        working-directory: apps/web/out
+        run: |
+          zip -r -9 ../../../web-bundle-${{ steps.meta.outputs.build_id }}.zip .
+          cd ../../..
+          BUNDLE=web-bundle-${{ steps.meta.outputs.build_id }}.zip
+          CHECKSUM=$(sha256sum "$BUNDLE" | awk '{ print $1 }')
+          SIZE=$(stat -c%s "$BUNDLE")
+          echo "bundle=$BUNDLE" >> $GITHUB_OUTPUT
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload to S3 (versioned + immutable)
+        run: |
+          aws s3 cp \
+            "${{ steps.pkg.outputs.bundle }}" \
+            "s3://${{ secrets.LIVE_UPDATES_S3_BUCKET }}/bundles/${{ steps.pkg.outputs.bundle }}" \
+            --cache-control "public, max-age=31536000, immutable"
+
+      - name: Bump API manifest env vars
+        env:
+          PAYLOAD: |
+            {
+              "channel": "${{ inputs.channel || 'beta' }}",
+              "version": "${{ steps.meta.outputs.version }}",
+              "buildId": "${{ steps.meta.outputs.build_id }}",
+              "url": "${{ secrets.LIVE_UPDATES_CDN_BASE }}/${{ steps.pkg.outputs.bundle }}",
+              "checksum": "${{ steps.pkg.outputs.checksum }}",
+              "size": ${{ steps.pkg.outputs.size }},
+              "rolloutPct": ${{ inputs.rollout_pct || '10' }}
+            }
+        run: |
+          SIG=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.API_DEPLOY_HOOK_SECRET }}" | awk '{print $2}')
+          curl -fsSL -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-NP-Signature: sha256=$SIG" \
+            -d "$PAYLOAD" \
+            "${{ secrets.API_DEPLOY_HOOK_URL }}"
+
+      - name: Smoke test manifest
+        run: |
+          curl -fsSL "${{ secrets.API_URL }}/v1/app/live-updates/manifest?platform=ios&nativeVersion=1.0.0&channel=${{ inputs.channel || 'beta' }}" \
+            | tee manifest.json
+          BUILD_ID=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).buildId")
+          test "$BUILD_ID" = "${{ steps.meta.outputs.build_id }}" \
+            || (echo "buildId mismatch — manifest=${BUILD_ID} expected=${{ steps.meta.outputs.build_id }}"; exit 1)
+
+      - name: Notify Sentry of release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_WEB }}
+        run: |
+          npx @sentry/cli releases new "live-${{ steps.meta.outputs.build_id }}"
+          npx @sentry/cli releases set-commits "live-${{ steps.meta.outputs.build_id }}" --auto
+          npx @sentry/cli releases files "live-${{ steps.meta.outputs.build_id }}" upload-sourcemaps apps/web/out --validate || true
+          npx @sentry/cli releases finalize "live-${{ steps.meta.outputs.build_id }}"
+
+      - name: Bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.bundle }}
+          path: ${{ steps.pkg.outputs.bundle }}
+          retention-days: 30

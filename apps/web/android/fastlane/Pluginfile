@@ -1,0 +1,2 @@
+# Phase 18 — Android Fastlane plugins.
+gem "fastlane-plugin-sentry"

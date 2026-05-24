@@ -1,0 +1,7 @@
+# Phase 18 — iOS Fastlane plugins.
+#
+# `fastlane-plugin-sentry` wraps sentry-cli for dSYM upload + release
+# tagging. Without it the `sentry_debug_files_upload` action in the
+# Fastfile would no-op.
+
+gem "fastlane-plugin-sentry"

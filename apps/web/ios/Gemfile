@@ -1,0 +1,13 @@
+source "https://rubygems.org"
+
+# Phase 18 — Fastlane runtime for the iOS pipeline. Pinned to a
+# major version so a surprise plugin release doesn't break CI overnight.
+
+gem "fastlane", "~> 2.225"
+
+# CocoaPods runs as part of the build (gym → cocoapods action). Keep
+# the version in sync with `apps/web/ios/App/Podfile.lock`.
+gem "cocoapods", "~> 1.15"
+
+plugins_path = File.expand_path("../fastlane/Pluginfile", __FILE__)
+eval_gemfile(plugins_path) if File.exist?(plugins_path)

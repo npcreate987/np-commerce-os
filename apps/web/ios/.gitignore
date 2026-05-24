@@ -1,0 +1,8 @@
+# Fastlane build outputs
+build/
+*.ipa
+*.app.dSYM.zip
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+fastlane/screenshots

@@ -40,6 +40,16 @@ export const userEventKindSchema = z.enum([
   // Recommendation impressions
   'reco_impression',
   'reco_click',
+  // Phase 18 — Native shell lifecycle (Capacitor App plugin events).
+  // Powers MAU/DAU split web vs native, retention per platform, and
+  // pairs OTA rollout cohorts with crash trends.
+  'app_open',
+  'app_background',
+  'app_resume',
+  'app_url_open',
+  'live_update_downloaded',
+  'live_update_applied',
+  'live_update_failed',
 ]);
 export type UserEventKind = z.infer<typeof userEventKindSchema>;
 

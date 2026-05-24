@@ -55,7 +55,15 @@ export type TrackKind =
   | 'email_open'
   | 'chat_open'
   | 'reco_impression'
-  | 'reco_click';
+  | 'reco_click'
+  // Phase 18 — native shell lifecycle (Capacitor App plugin)
+  | 'app_open'
+  | 'app_background'
+  | 'app_resume'
+  | 'app_url_open'
+  | 'live_update_downloaded'
+  | 'live_update_applied'
+  | 'live_update_failed';
 
 export interface TrackFields {
   entityType?: string;

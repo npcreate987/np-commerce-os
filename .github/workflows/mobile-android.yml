@@ -1,0 +1,156 @@
+name: mobile-android
+
+# Phase 18 — Mobile Android pipeline (Play Console internal track).
+#
+# เมื่อ trigger:
+#   - push tag `mobile-v*` (semver) → build AAB + upload internal track
+#   - manual `workflow_dispatch` → choose lane (internal | alpha | beta | production)
+#
+# Flow:
+#   1) checkout
+#   2) setup Node 20 + pnpm + cache + JDK 17
+#   3) `pnpm install --frozen-lockfile`
+#   4) `BUILD_STATIC=true pnpm --filter web build`
+#   5) `pnpm --filter web cap sync android`
+#   6) decode keystore + service account JSON
+#   7) Fastlane `android internal` → Gradle bundleRelease + Supply upload
+#   8) Fastlane upload ProGuard mapping → Sentry release
+#
+# Secrets:
+#   ANDROID_KEYSTORE_BASE64        # base64 ของ release.keystore
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+#   PLAY_SERVICE_ACCOUNT_JSON      # JSON ของ Service Account (`Release Manager`)
+#   ANDROID_PACKAGE_NAME           # app.np.commerce
+#   SENTRY_AUTH_TOKEN
+#   SENTRY_ORG
+#   SENTRY_PROJECT_NATIVE_ANDROID
+
+on:
+  push:
+    tags:
+      - 'mobile-v*'
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: 'Fastlane lane (internal | alpha | beta | production)'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+
+concurrency:
+  group: mobile-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build + Play upload
+    runs-on: ubuntu-22.04
+    environment:
+      name: android-production
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Ruby (Fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: apps/web/android
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve build number
+        id: meta
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          VERSION=$(node -p "require('./apps/web/package.json').version || '1.0.0'")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "release=app.np.commerce@${VERSION}+${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Build web bundle (static export)
+        env:
+          BUILD_STATIC: 'true'
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.meta.outputs.version }}
+          NEXT_PUBLIC_APP_BUILD: ${{ steps.meta.outputs.build }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: production
+          NEXT_PUBLIC_SENTRY_RELEASE: ${{ steps.meta.outputs.release }}
+        run: pnpm --filter web build
+
+      - name: Capacitor sync
+        run: pnpm --filter web exec cap sync android
+
+      - name: Decode keystore
+        run: |
+          mkdir -p apps/web/android/app
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > apps/web/android/app/release.keystore
+          ls -lh apps/web/android/app/release.keystore
+
+      - name: Decode Play service account
+        run: |
+          echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > apps/web/android/fastlane/play-service-account.json
+          # Validate JSON without leaking content
+          node -e "JSON.parse(require('fs').readFileSync('apps/web/android/fastlane/play-service-account.json','utf8')); console.log('service account JSON ok')"
+
+      - name: Fastlane lane
+        working-directory: apps/web/android
+        env:
+          LANE: ${{ inputs.lane || 'internal' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
+          BUILD_NUMBER: ${{ steps.meta.outputs.build }}
+          VERSION_NUMBER: ${{ steps.meta.outputs.version }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_NATIVE_ANDROID }}
+          SENTRY_RELEASE: ${{ steps.meta.outputs.release }}
+        run: bundle exec fastlane $LANE
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-build-${{ steps.meta.outputs.build }}
+          path: |
+            apps/web/android/app/build/outputs/bundle/release/*.aab
+            apps/web/android/app/build/outputs/mapping/release/mapping.txt
+          retention-days: 14
+
+      - name: Clean up secrets
+        if: always()
+        run: |
+          rm -f apps/web/android/app/release.keystore
+          rm -f apps/web/android/fastlane/play-service-account.json

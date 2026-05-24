@@ -1,0 +1,14 @@
+# Gradle / Fastlane
+.gradle/
+build/
+*.aab
+*.apk
+gradle.properties.local
+
+# Secrets — must NEVER end up in git
+app/release.keystore
+fastlane/play-service-account.json
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+fastlane/screenshots

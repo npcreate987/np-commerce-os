@@ -422,6 +422,260 @@ PRD สำหรับการปรับ UX/UI + ไล่ฟังก์ช�
   unknown provider 404 · backup script writes 59 kB gzip · admin default
   password warning fires
 
+- **Phase 18 — Production Mobile Ops (code-side complete)** 🟢 done (2026-05-24)
+  เปิดทาง deploy iOS/Android อัตโนมัติจาก CI · เก็บ crash + ANR ผ่าน
+  Sentry · ส่ง JS/CSS update ทันทีผ่าน OTA โดยไม่ต้องผ่าน store review
+  - [x] **18.1 Sentry Capacitor adapter** —
+    `apps/web/src/lib/native-observability.ts`:
+    - `initNativeObservability()` bootstrap จาก `lib/native.ts`
+    - ANR detection (Android worker 5s · iOS hang 2s) + crash + watchdog
+      termination tracking · release/dist ผูกกับ `appId@version+build`
+    - Optional peer (เหมือน ATT plugin) — install: `pnpm --filter web
+      add @sentry/capacitor`
+    - `setNativeUser` hook ทุก login/logout จาก `auth-store.ts`
+  - [x] **18.2 Live Updates (OTA)**:
+    - **Client**: `apps/web/src/lib/live-updates.ts` — `checkLiveUpdate`,
+      `downloadLiveUpdate`, `applyLiveUpdate`, `resetLiveUpdate`,
+      `checkAndApplyLiveUpdate` · channel toggle (production/beta) ·
+      Sentry breadcrumb ทุก phase
+    - **Server**: `apps/api/src/common/live-updates.controller.ts`
+      `GET /v1/app/live-updates/manifest?platform=&nativeVersion=&currentBuildId=&channel=`
+      → canary rollout (hash userId mod 100) · kill-switch
+      (`LIVE_UPDATES_PAUSE=1`) · min-native-version gate · TTL หน่วงโพลล์
+    - Wire ใน `NativeBridge` cold-start (silent download, atomic swap
+      รอบ next launch)
+  - [x] **18.3 Native lifecycle → tracker** —
+    `apps/web/src/lib/native-lifecycle.ts`:
+    - Listen `App.appStateChange` + `App.appUrlOpen` + `App.backButton`
+    - Emit `app_open` / `app_background` / `app_resume` / `app_url_open`
+      ลง `/v1/events/batch` (Phase 10.1 reused)
+    - เพิ่ม 7 event kinds: `app_open`, `app_background`, `app_resume`,
+      `app_url_open`, `live_update_{downloaded,applied,failed}` ใน
+      `track.ts` + `apps/api/src/shared/types/event.ts` +
+      `packages/types/src/event.ts`
+  - [x] **18.4 GitHub Actions**:
+    - `.github/workflows/mobile-ios.yml` — TestFlight pipeline
+      (tag `mobile-v*`) macos-14 · Match certs · gym · pilot ·
+      Sentry dSYM upload
+    - `.github/workflows/mobile-android.yml` — Play Internal pipeline
+      (tag `mobile-v*`) ubuntu-22.04 · gradle bundleRelease · supply
+      track=internal · Sentry ProGuard mapping upload
+    - `.github/workflows/mobile-live-update.yml` — OTA publisher
+      (tag `live-v*`) · S3 upload immutable · API webhook bump env vars
+      · Sentry release create · smoke test manifest
+    - Concurrency + environment-based approvals + secret rotation
+  - [x] **18.5 Fastlane skeleton**:
+    - iOS: `apps/web/ios/{Gemfile,fastlane/{Appfile,Matchfile,Fastfile,Pluginfile}}`
+      lanes `beta` (TestFlight) + `release` (App Store) · `match`
+      readonly cert sync · gym + pilot/deliver
+    - Android: `apps/web/android/{Gemfile,fastlane/{Appfile,Fastfile,Pluginfile}}`
+      lanes `internal/alpha/beta/production` · gradle + supply +
+      Sentry ProGuard mapping action
+    - `fastlane-plugin-sentry` ทั้ง 2 ฝั่ง
+  - [x] **18.6 Secrets reference** — `docs/phase-18-secrets.md`:
+    - 6 หมวด (Apple/Match/Play/Sentry/Live-Updates/Other) ครบทุก secret
+    - Pre-flight checklist ก่อนรัน CI ครั้งแรก
+    - Rotation schedule (Apple key 1y · Play SA 90d · Match yearly ·
+      Sentry token 6mo · API hook 3mo · Keystore = never)
+  - [x] **18.7 Documentation** — `docs/phase-18-mobile-ops.md`:
+    - Architecture diagram ของ Sentry triple-project setup
+    - Apple OTA constraints (JS-only, no native code, no primary purpose change)
+    - Rollback playbook (3 สถานการณ์)
+    - Alert rules แนะนำสำหรับ Sentry
+    - Smoke test commands
+  - **Manual steps pending** (ต้องคน + เงิน):
+    - Apple Developer Program $99/y + Match repo + first cert
+    - Play Console $25 + keystore (back-up offline 2 ที่!) + Service Account
+    - Sentry org + 3 projects (web/ios/android) + alert rules
+    - S3 bucket + CloudFront + IAM user + API webhook handler
+    - GitHub Environments + required reviewers
+    - Install runtime:
+      `pnpm --filter web add @sentry/capacitor @capacitor/live-updates && pnpm cap sync`
+  - **Smoke**:
+    - `pnpm typecheck` clean (web + api)
+    - `pnpm --filter web exec next lint --dir src/lib --dir src/stores` clean
+    - `CAPACITOR_COCOAPODS_PATH=$(which pod) pnpm cap sync ios` → 11 plugins ✔
+    - `pnpm cap sync android` → 11 plugins ✔
+    - ReadLints บน 10 files ที่แก้ไข → clean
+  - ดูเต็ม: [`docs/phase-18-mobile-ops.md`](./docs/phase-18-mobile-ops.md)
+    + [`docs/phase-18-secrets.md`](./docs/phase-18-secrets.md)
+
+- **Phase 17 — Store Compliance + Submission (code-side complete)** 🟢 done (2026-05-24)
+  เตรียมทุกอย่างฝั่ง code ให้พร้อมส่ง App Store + Play Store review —
+  Privacy Manifest, ATT consent, account deletion, public privacy/terms,
+  reviewer seeder, store listing copy
+  - [x] **17.1 iOS Privacy Manifest** —
+    `apps/web/ios/App/App/PrivacyInfo.xcprivacy` declare:
+    - `NSPrivacyTracking = false`
+    - 5 required-reason APIs (UserDefaults CA92.1, FileTimestamp C617.1,
+      SystemBootTime 35F9.1, DiskSpace E174.1, ActiveKeyboards 54BD.1)
+    - 13 collected data types mapped to App Store nutrition labels
+      (Email, Phone, Name, UserID, DeviceID, Location coarse+precise,
+      Photos/Videos, OtherUserContent, ProductInteraction, CrashData,
+      PerformanceData)
+  - [x] **17.2 App Tracking Transparency (ATT)**:
+    - `lib/native.ts` → `getATTStatus()`, `requestATTPermission()`
+      (optional `@capacitor-community/app-tracking-transparency` — graceful
+      fallback `'unsupported'` ถ้ายังไม่ install)
+    - `components/att-consent-gate.tsx` — pre-prompt sheet ก่อน Apple
+      native dialog (lift opt-in rate); soft-decline เก็บใน `safeStorage`
+      เพื่อไม่ pester ผู้ใช้ซ้ำ
+    - Mount ผ่าน `NativeBridge` (จาก Phase 15) → wire `tracker.setConsent`
+      automatically
+  - [x] **17.3 Account Deletion** (Google Play Aug 2023 + Apple 2022
+    required, in-app ≤2 taps):
+    - Schema migration `20260524004659_phase17_account_deletion` เพิ่ม
+      `deletionRequestedAt`, `deletionPurgeAt`, `deletionReason` ใน `users`
+    - `account-deletion.service.ts` — `requestDeletion()`,
+      `cancelDeletion()`, `getStatus()`, `hardDelete()`,
+      `purgeExpiredAccounts()` + `setInterval` sweeper (6h) ใน
+      `OnApplicationBootstrap`
+    - `account-deletion.controller.ts` — 3 endpoints:
+      `GET/DELETE/POST` ที่ `/v1/me/account[/deletion[/cancel]]`
+    - `auth.service.login()` reject ด้วย `ACCOUNT_DELETION_PENDING`
+      เมื่อ user pending
+    - `(customer)/profile/privacy/page.tsx` เพิ่ม
+      `<AccountDeletionCard>` — 30-day grace, reason textarea,
+      auto-logout 3s หลังขอลบ
+  - [x] **17.4 Public Privacy + Terms pages**:
+    - `apps/web/src/app/legal/privacy/page.tsx` → `/legal/privacy`
+      (10 ส่วน: ข้อมูลที่เก็บ/ใช้/แชร์/สิทธิ์ PDPA/retention/ATT)
+    - `apps/web/src/app/legal/terms/page.tsx` → `/legal/terms`
+      (10 ส่วน: คุณสมบัติ/ลูกค้า/ผู้ขาย/Rider/เนื้อหา/ยกเลิก/ความรับผิด)
+    - Server components (ไม่มี `'use client'`) → reviewer crawler scan ผ่าน
+  - [x] **17.5 Reviewer demo seeder** —
+    `apps/api/prisma/seed-reviewer.ts` + script `seed:reviewer`:
+    - `reviewer@np.app` / `NPReview2026!` (override `REVIEWER_*` env)
+    - Idempotent (upsert + ล้าง deletion fields)
+    - Pre-seed cart 1 item เพื่อทดสอบ checkout
+  - [x] **17.6 Store listing assets** — `docs/store-listing/`:
+    - `apple/{metadata,review-info,screenshots}.md` — copy TH+EN,
+      4000-char description, 100-char keywords, 4000-char review notes
+    - `google/{metadata,data-safety,screenshots}.md` — Title 50ch,
+      short 80ch, Data Safety table mapping ทุก data type ที่ตรงกับ
+      Privacy Manifest
+    - `shared/icon.md` — 1024×1024 master + adaptive icon spec
+  - [x] **17.7 Submission checklist** — `docs/phase-17-store-compliance.md`
+    (pre-flight, per-release, post-launch)
+  - **Manual steps pending** (ต้องคน):
+    - Apple Developer Program $99/y · Play Console $25 (one-time)
+    - Bundle ID + provisioning + signing keys + APNs `.p8`
+    - Screenshots capture (3-10 ต่อขนาด)
+    - Submit for review (Apple 24-48h · Google 1-7d)
+  - **Smoke**: `pnpm typecheck` clean · `cap sync` ✔ 11 plugins ·
+    `seed:reviewer` ✔ · `ReadLints` clean
+  - ดูเต็ม: [`docs/phase-17-store-compliance.md`](./docs/phase-17-store-compliance.md)
+    + [`docs/store-listing/README.md`](./docs/store-listing/README.md)
+
+- **Phase 16 — Native Capabilities Wiring (Capacitor plugins → live UX)** 🟢 done (2026-05-24)
+  ทุก Capacitor plugin ที่สแกนใน Phase 15 ถูก wire ผ่าน adapter เดียว
+  (`apps/web/src/lib/native.ts`) — ทำงานได้ทั้ง **web** (fallback ไป
+  browser API) และ **native** (เรียก plugin จริงผ่าน dynamic import)
+  - [x] **16.1 Native adapter** — `lib/native.ts` ห่อ Preferences,
+    PushNotifications, Geolocation, Share, Browser, App, Device, Network,
+    SplashScreen ทั้งหมดให้มี API เดียว (`safeStorage`,
+    `registerNativePush`, `getCurrentPosition`, `nativeShare`,
+    `openExternalUrl`, `getAppInfo`, `getDeviceInfo`, `getNetworkStatus`,
+    `wireDeepLinks`, `hideNativeSplash`) → web bundle ไม่โดน Capacitor SDK
+    เพราะ tree-shake ผ่าน dynamic import
+  - [x] **16.2 Auth + safe storage** — `auth-store.ts` ใช้
+    `createJSONStorage(platformStorage)` → token เก็บใน Preferences
+    บน native (รอด iOS WKWebView 7-day ITP clearance) / localStorage บน
+    web · `migrate()` ครั้งเดียวคัด legacy localStorage → Preferences
+    เมื่อ user upgrade จาก PWA → native
+  - [x] **16.3 Native push UI** — `/profile/notifications` เพิ่ม Card
+    "มือถือเครื่องนี้" (เฉพาะ `isNative()`) แสดง permission state +
+    ปุ่ม register manual · `NativeBridge` ใน `CustomerShell` ยัง
+    auto-register ตอน boot ด้วย
+  - [x] **16.4 App version check + force-update gate** —
+    `apps/api/src/common/app-version.controller.ts` (`GET /v1/app/version`
+    คืน `status: OK|UPDATE_AVAILABLE|UPDATE_REQUIRED`) + env vars
+    `APP_LATEST_VERSION` / `APP_MIN_SUPPORTED` / `APP_*_STORE_URL` ·
+    `apps/web/src/components/force-update-gate.tsx` mount ผ่าน
+    `NativeBridge` → cold-start fetch + refetch ทุก 30 นาที →
+    ถ้า `UPDATE_REQUIRED` แสดงหน้า full-screen ปุ่มเดียว "เปิด Store"
+  - [x] **16.5 Universal Links + App Links**:
+    - iOS: สร้าง `apps/web/ios/App/App/App.entitlements` (aps-environment,
+      `applinks:np.app`, keychain group) · Info.plist เพิ่ม purpose
+      strings ครบ (Camera/Photo/Mic/Location/FaceID/ATT) + custom
+      scheme `npcommerce://` + `UIBackgroundModes=remote-notification`
+    - Android: AndroidManifest.xml เพิ่ม `<intent-filter
+      android:autoVerify="true">` สำหรับ `https://np.app/*` + custom
+      scheme `npcommerce://` · permissions ครบ
+      (POST_NOTIFICATIONS, COARSE/FINE/BACKGROUND_LOCATION, CAMERA,
+      RECORD_AUDIO, READ_MEDIA_IMAGES/VIDEO, USE_BIOMETRIC, VIBRATE) ·
+      `<queries>` Android 11+
+  - [x] **16.6 Geolocation + Share + Browser swap**:
+    - `navigator.geolocation` → `getCurrentPosition()` ใน `/local`,
+      `/rider/dashboard`, `/merchant/local/[shopId]`
+    - `navigator.share` → `nativeShare()` ใน video-feed,
+      profile/_shared, rewards, creator/links/[id]
+  - **Deferred (Phase 16.x)**:
+    - Camera plugin replacement สำหรับ `/feed/create` (input file capture
+      ปัจจุบันใช้ได้บน Capacitor WebView แล้ว)
+    - Static export refactor (Next 14.2 ไม่ resolve
+      `generateStaticParams` ใต้ `'use client'` layouts — ต้อง refactor
+      `(creator)/`, `(rider)/`, `(customer)/` layouts เป็น server
+      components) — ตอนนี้ Capacitor ใช้ `server.url` ชี้ไป staging URL
+      แทน static bundle
+  - **Smoke (live)**: `cap sync` → ✔ iOS 11 plugins / ✔ Android 11
+    plugins · `pnpm typecheck` clean · ReadLints clean
+  - ดูเต็ม: [`docs/phase-16-mobile-capabilities.md`](./docs/phase-16-mobile-capabilities.md)
+
+- **Phase 15 — Mobile Native Shell (Capacitor)** 🟢 done (2026-05-24)
+  เปิดทาง iOS/Android wrap PWA ด้วย Capacitor 6 — code-share 100% กับ web
+  ที่ทำใน Phase 11-14 · **Strategy**: Static bundle (offline-first, App Store
+  reviewable) + 11 native plugins + asset pipeline + bridge layer
+  - [x] **15.1 Config** — `apps/web/capacitor.config.ts` prod-ready
+    (env-gated `allowMixedContent` + `loggingBehavior` · iOS scheme
+    `NPCommerce` · `server.allowNavigation` whitelist `*.np.app` ·
+    SplashScreen / StatusBar / Push / Preferences / Camera / Geolocation
+    plugin config)
+  - [x] **15.2 Native projects** — `apps/web/{ios,android}/` scaffold ครบ
+    (Xcode workspace + `pod install` 3.95s · Gradle 8 + manifest +
+    `app/src/main/res/`); commit เข้า git แต่ ignore Pods/build/keystores
+  - [x] **15.3 Asset pipeline**:
+    - `apps/web/resources/{logo,splash}.svg` master vector (NP monogram,
+      brand pink `#FF3E5C`)
+    - `apps/web/scripts/build-mobile-assets.mjs` ใช้ `sharp` แปลง SVG → PNG
+      (1024 icon + 2732 splash + 6 PWA sizes รวม maskable 78% safe-zone)
+    - `pnpm assets:generate` (← `@capacitor/assets`) gen 87 Android + 10 iOS
+      drawable folders + dark variants
+    - `pnpm assets:build` รวมทั้ง 2 steps; idempotent rerun ได้
+  - [x] **15.4 Native bridge** (`apps/web/src/lib/native.ts`):
+    `isNative()`/`getPlatform()` synchronous · `safeStorage` —
+    Preferences plugin บน native, localStorage บน web (refresh token
+    survives iOS WKWebView 7-day clear) · `registerNativePush(token)` —
+    APNs/FCM token → existing `/v1/notifications/devices` (Phase 9.1) ·
+    `hideNativeSplash()` · `wireDeepLinks(push)` — `App.addListener('appUrlOpen')`
+    → router.push · `<NativeBridge>` provider mount ใน `CustomerShell`
+  - [x] **15.5 Capacitor-aware env** (`apps/web/src/lib/env.ts`):
+    `isCapacitorNative()` short-circuit → ใช้ `NEXT_PUBLIC_API_URL`
+    ตรง ๆ (WebView ของ Capacitor มี hostname=`localhost` แต่ API อยู่
+    remote)
+  - [x] **15.6 PWA + Deep links**:
+    - `manifest.json` เพิ่ม `id` · `shortcuts` 4 ทางลัด (ฟีด/ตะกร้า/
+      ออเดอร์/ใกล้ฉัน) · `share_target` รับ share-sheet → `/feed/create` ·
+      `related_applications` ลิงก์ Play + App Store
+    - `apps/web/public/.well-known/apple-app-site-association` template
+      (Universal Links — 7 path patterns: `/order/*`, `/product/*`,
+      `/shop/*`, `/feed`, `/cart`, `/orders`, `/r/*`)
+    - `apps/web/public/.well-known/assetlinks.json` template (Android
+      App Links + `get_login_creds` delegation)
+    - `next.config.mjs` `headers()` ส่ง `Content-Type: application/json`
+      ให้ทั้ง 2 endpoints (skip ใน BUILD_STATIC; Vercel เสริม `vercel.json` ภายหลัง)
+  - [x] **15.7 Repo hygiene** — `.gitignore` commit `ios/`+`android/`
+    project trees, ignore `Pods/`, `build/`, `.gradle/`, `*.jks`, `*.keystore`
+  - **Decision points** (ตอบในเซสชั่นนี้):
+    Hosting = static bundle · Auth = email-only (no Sign in with Apple
+    trigger) · Payment = physical only (no Apple IAP) · Scope = full Phase 15
+  - **Smoke (live)**: `pnpm install` (1280 pkgs · 70.6s) →
+    `assets:render` (8 PNG ใน 1.0s) → `cap:add:ios` (10ms scaffold) →
+    `cap:add:android` (14ms) → `assets:generate` (104 files · 11.2s) →
+    `cap:sync` (11 plugins · pod install 3.95s · 4.7s total) →
+    `pnpm typecheck` clean → ReadLints clean
+  - ดูคู่มือเต็ม: [`docs/phase-15-mobile.md`](./docs/phase-15-mobile.md)
+
 - **Phase 14 — Desktop Experience** 🟢 done (2026-05-23)
   ทำ desktop variant แยกออกจาก mobile แบบ form-factor split ทั้งทุกหน้าหลัก
   ตามรูปแบบ Option B (separate `<Mobile/>` + `<Desktop/>` components) เพื่อให้
@@ -583,4 +837,4 @@ cd apps/web && pnpm cap:dev:android           # live reload บน device/emulat
 ## 10. การติดต่อ / Maintainer
 
 - Owner: **NP / @ii**
-- ไฟล์นี้อัปเดตเมื่อ: 2026-05-23 (Phase 14 — Desktop Experience: Option B separate Mobile/Desktop variants)
+- ไฟล์นี้อัปเดตเมื่อ: 2026-05-24 (Phase 18 — Production Mobile Ops: Sentry Capacitor + ANR + live updates (OTA) + GitHub Actions iOS/Android/OTA + Fastlane skeleton + native lifecycle tracker events)
