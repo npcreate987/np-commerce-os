@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { nativeShare } from '@/lib/native';
 import { useAuthStore } from '@/stores/auth-store';
 import { tracker } from '@/lib/track';
 import { cn } from '@/lib/cn';
@@ -542,11 +543,11 @@ export function VideoFeed({
                         entityId: v.id,
                         surface,
                       });
-                      if (typeof navigator.share === 'function') {
-                        navigator.share({ title: v.caption || 'NP Video', url }).catch(() => undefined);
-                      } else {
-                        navigator.clipboard?.writeText(url).catch(() => undefined);
-                      }
+                      void nativeShare({
+                        title: v.caption || 'NP Video',
+                        text: v.caption || 'มาดูคลิปนี้กัน',
+                        url,
+                      });
                     }}
                     className="flex flex-col items-center gap-1"
                   >

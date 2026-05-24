@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
+import { getCurrentPosition } from '@/lib/native';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,15 +139,14 @@ export default function MerchantLocalEditPage(): JSX.Element {
     },
   });
 
-  function useMyLocation(): void {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setLat(String(p.coords.latitude));
-        setLng(String(p.coords.longitude));
-      },
-      () => setError('ไม่สามารถอ่านตำแหน่งได้'),
-    );
+  async function fillMyLocation(): Promise<void> {
+    const pos = await getCurrentPosition({ timeoutMs: 6000, highAccuracy: true });
+    if (!pos) {
+      setError('ไม่สามารถอ่านตำแหน่งได้');
+      return;
+    }
+    setLat(String(pos.latitude));
+    setLng(String(pos.longitude));
   }
 
   function submit(e: FormEvent): void {
@@ -232,7 +232,7 @@ export default function MerchantLocalEditPage(): JSX.Element {
           </div>
           <button
             type="button"
-            onClick={useMyLocation}
+            onClick={() => void fillMyLocation()}
             className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-ink-50 px-3 py-1.5 text-[12px] font-semibold text-ink-700 ring-1 ring-ink-100"
           >
             <NavigationIcon className="h-3 w-3" />

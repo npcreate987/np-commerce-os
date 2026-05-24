@@ -186,6 +186,43 @@ async function request<T>(method: string, path: string, opts: ApiOptions = {}): 
 export const api = {
   health: () => request<{ status: string }>('GET', '/health'),
 
+  // Phase 16 — Native app version gate
+  app: {
+    version: (q?: { platform?: string; version?: string; build?: string }) =>
+      request<{
+        latest: string;
+        minSupported: string;
+        ios: { storeUrl: string };
+        android: { storeUrl: string };
+        message: { th: string; en: string };
+        current: { platform: string; version: string; build: string } | null;
+        status: 'OK' | 'UPDATE_AVAILABLE' | 'UPDATE_REQUIRED' | 'UNKNOWN';
+      }>('GET', '/app/version', { query: q }),
+  },
+
+  // Phase 17 — Account deletion (Store-compliance requirement)
+  account: {
+    deletionStatus: (token: string) =>
+      request<{
+        pending: boolean;
+        requestedAt: string | null;
+        purgeAt: string | null;
+        graceDays: number;
+      }>('GET', '/me/account/deletion', { token }),
+    requestDeletion: (token: string, reason?: string) =>
+      request<{ purgeAt: string; graceDays: number }>(
+        'DELETE',
+        '/me/account',
+        { token, body: { reason } },
+      ),
+    cancelDeletion: (token: string) =>
+      request<{ cancelled: boolean }>(
+        'POST',
+        '/me/account/deletion/cancel',
+        { token, body: {} },
+      ),
+  },
+
   auth: {
     signup: (input: SignupInput) => request<AuthResponse>('POST', '/auth/signup', { body: input }),
     login: (input: LoginInput) => request<AuthResponse>('POST', '/auth/login', { body: input }),

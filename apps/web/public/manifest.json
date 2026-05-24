@@ -4,31 +4,145 @@
   "description": "ระบบ Commerce กลางสำหรับร้านค้าออนไลน์ ร้านท้องถิ่น และ Creator",
   "start_url": "/",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
-  "background_color": "#ffffff",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "background_color": "#FF3E5C",
   "theme_color": "#FF3E5C",
   "orientation": "portrait",
   "lang": "th",
-  "categories": ["shopping", "lifestyle"],
+  "dir": "ltr",
+  "categories": [
+    "shopping",
+    "lifestyle",
+    "social"
+  ],
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "../icons/icon-48.webp",
+      "type": "image/png",
+      "sizes": "48x48",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-72.webp",
+      "type": "image/png",
+      "sizes": "72x72",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-96.webp",
+      "type": "image/png",
+      "sizes": "96x96",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-128.webp",
+      "type": "image/png",
+      "sizes": "128x128",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-192.webp",
+      "type": "image/png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
+      "src": "../icons/icon-256.webp",
       "type": "image/png",
-      "purpose": "any"
+      "sizes": "256x256",
+      "purpose": "any maskable"
     },
     {
-      "src": "/icons/maskable-512.png",
-      "sizes": "512x512",
+      "src": "../icons/icon-512.webp",
       "type": "image/png",
-      "purpose": "maskable"
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "ฟีดวิดีโอ",
+      "short_name": "ฟีด",
+      "description": "ดูคลิปแนะนำสินค้า",
+      "url": "/feed",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "ตะกร้า",
+      "short_name": "ตะกร้า",
+      "description": "ดูสินค้าที่เลือกไว้",
+      "url": "/cart",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "คำสั่งซื้อของฉัน",
+      "short_name": "ออเดอร์",
+      "description": "ดูสถานะการสั่งซื้อ",
+      "url": "/orders",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "ใกล้ฉัน",
+      "short_name": "ใกล้ฉัน",
+      "description": "ร้านอาหารและร้านท้องถิ่นใกล้ตัว",
+      "url": "/local",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/feed/create",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "caption",
+      "files": [
+        {
+          "name": "video",
+          "accept": [
+            "video/mp4",
+            "video/webm",
+            "video/quicktime"
+          ]
+        }
+      ]
+    }
+  },
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=app.np.commerce",
+      "id": "app.np.commerce"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/np-commerce/id000000000"
     }
   ]
 }

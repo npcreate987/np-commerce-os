@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { nativeShare } from '@/lib/native';
 import { useAuthStore } from '@/stores/auth-store';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -67,22 +68,15 @@ export default function CreatorLinkDetailPage(): JSX.Element {
   };
 
   const doShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: resolved?.label ?? resolved?.product?.name ?? 'NP Commerce',
-          text:
-            resolved?.product?.name
-              ? `ลองสินค้านี้สิ: ${resolved.product.name}`
-              : 'แนะนำของจาก NP Commerce',
-          url: shortUrl,
-        });
-      } catch {
-        /* user cancelled */
-      }
-    } else {
-      void copy();
-    }
+    const ok = await nativeShare({
+      title: resolved?.label ?? resolved?.product?.name ?? 'NP Commerce',
+      text: resolved?.product?.name
+        ? `ลองสินค้านี้สิ: ${resolved.product.name}`
+        : 'แนะนำของจาก NP Commerce',
+      url: shortUrl,
+      dialogTitle: 'แชร์ลิงก์',
+    });
+    if (!ok) void copy();
   };
 
   return (

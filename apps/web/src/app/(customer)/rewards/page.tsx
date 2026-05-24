@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { nativeShare } from '@/lib/native';
 import { useAuthStore } from '@/stores/auth-store';
 import { GlassCard, MeshBackdrop, Orb } from '@/components/ui/glass';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -402,11 +403,11 @@ function InviteTab({
           <button
             type="button"
             onClick={() => {
-              if (navigator.share) {
-                navigator.share({ title: 'NP Commerce', text: 'มาช้อปกับฉันสิ!', url: inviteUrl });
-              } else {
-                navigator.clipboard?.writeText(inviteUrl);
-              }
+              void nativeShare({
+                title: 'NP Commerce',
+                text: 'มาช้อปกับฉันสิ!',
+                url: inviteUrl,
+              });
             }}
             className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm"
           >

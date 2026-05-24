@@ -7,6 +7,8 @@ import { ChatWidget } from '@/components/chat-widget';
 import { CustomerTopBar } from '@/components/shell/customer-top-bar';
 import { CustomerMobileHeader } from '@/components/shell/customer-mobile-header';
 import { CreateFAB } from '@/components/shell/create-fab';
+import { NativeBridge } from '@/components/native-bridge';
+import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/cn';
 
 /**
@@ -33,6 +35,7 @@ const IMMERSIVE_ROUTES = new Set<string>(['/feed']);
 export function CustomerShell({ children }: { children: ReactNode }): JSX.Element {
   const pathname = usePathname();
   const immersive = pathname ? IMMERSIVE_ROUTES.has(pathname) : false;
+  const token = useAuthStore((s) => s.token);
 
   return (
     <div
@@ -41,6 +44,7 @@ export function CustomerShell({ children }: { children: ReactNode }): JSX.Elemen
         !immersive && 'pb-24 lg:pb-0',
       )}
     >
+      <NativeBridge authToken={token} />
       <CustomerTopBar />
       {!immersive && <CustomerMobileHeader />}
       {children}

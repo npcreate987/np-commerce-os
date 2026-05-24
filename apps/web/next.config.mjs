@@ -17,7 +17,19 @@ const isStatic = process.env.BUILD_STATIC === 'true';
 const nextConfig = {
   reactStrictMode: true,
   // BUILD_STATIC=true → output: 'export' สำหรับ Capacitor (bundle ลง iOS/Android)
-  ...(isStatic ? { output: 'export', images: { unoptimized: true } } : {}),
+  // Phase 16.x — ก่อน static export จะสำเร็จเต็มรูปแบบ ต้อง refactor
+  // (creator)/layout.tsx, (rider)/layout.tsx ฯลฯ ให้เป็น server component
+  // (ตอนนี้เป็น `'use client'` ทำให้ Next 14.2 ไม่ pick generateStaticParams
+  // ใน dynamic child page) ปัจจุบัน Capacitor ดึง assets จาก `out/` (PWA
+  // มี service worker เก็บไว้ระหว่าง dev) หรือใช้ remote URL ตอน dev mode
+  ...(isStatic
+    ? {
+        output: 'export',
+        images: { unoptimized: true },
+        eslint: { ignoreDuringBuilds: true },
+        trailingSlash: true,
+      }
+    : {}),
   distDir: process.env.NEXT_DIST_DIR || '.next',
   experimental: {
     typedRoutes: false,
@@ -32,6 +44,23 @@ const nextConfig = {
     ],
   },
   transpilePackages: ['@np/types'],
+  // Universal Links (iOS) + App Links (Android) require these well-known
+  // files to be served as application/json. Production web (SSR mode)
+  // uses these headers; BUILD_STATIC=true skips headers() but that's
+  // OK because static export bundle is for Capacitor (not web).
+  async headers() {
+    if (isStatic) return [];
+    return [
+      {
+        source: '/.well-known/apple-app-site-association',
+        headers: [{ key: 'content-type', value: 'application/json' }],
+      },
+      {
+        source: '/.well-known/assetlinks.json',
+        headers: [{ key: 'content-type', value: 'application/json' }],
+      },
+    ];
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {

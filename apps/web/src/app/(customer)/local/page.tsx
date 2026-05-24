@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { getCurrentPosition } from '@/lib/native';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Orb } from '@/components/ui/glass';
@@ -71,20 +72,16 @@ export default function LocalPage(): JSX.Element {
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
+    let cancelled = false;
+    void getCurrentPosition({ timeoutMs: 5000, highAccuracy: false }).then(
       (p) => {
-        setPos({
-          lat: p.coords.latitude,
-          lng: p.coords.longitude,
-          source: 'gps',
-        });
+        if (cancelled || !p) return;
+        setPos({ lat: p.latitude, lng: p.longitude, source: 'gps' });
       },
-      () => {
-        // keep default
-      },
-      { enableHighAccuracy: false, timeout: 4000 },
     );
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const { data, isLoading } = useQuery({

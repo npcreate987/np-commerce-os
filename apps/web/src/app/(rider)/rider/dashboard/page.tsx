@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { getCurrentPosition } from '@/lib/native';
 import { useAuthStore } from '@/stores/auth-store';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -67,30 +68,15 @@ export default function RiderDashboardPage(): JSX.Element {
           online,
         });
       }
-      // When going online, fetch current location
-      return new Promise<typeof rider>((resolve, reject) => {
-        if (!navigator.geolocation) {
-          api.riders
-            .updateLocation(token!, { lat: 13.7563, lng: 100.5018, online })
-            .then(resolve, reject);
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          (p) => {
-            api.riders
-              .updateLocation(token!, {
-                lat: p.coords.latitude,
-                lng: p.coords.longitude,
-                online,
-              })
-              .then(resolve, reject);
-          },
-          () => {
-            api.riders
-              .updateLocation(token!, { lat: 13.7563, lng: 100.5018, online })
-              .then(resolve, reject);
-          },
-        );
+      // When going online, fetch current location (high accuracy for rider)
+      const pos = await getCurrentPosition({
+        timeoutMs: 6000,
+        highAccuracy: true,
+      });
+      return api.riders.updateLocation(token!, {
+        lat: pos?.latitude ?? 13.7563,
+        lng: pos?.longitude ?? 100.5018,
+        online,
       });
     },
     onSuccess: () => {

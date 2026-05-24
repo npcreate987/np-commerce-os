@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <rect width="2732" height="2732" fill="#FF3E5C"/>
+  <g transform="translate(866 866)">
+    <rect width="1000" height="1000" rx="232" fill="rgba(255,255,255,0.10)"/>
+    <text x="500" y="624" fill="#FFFFFF"
+          font-family="Helvetica, Arial, sans-serif"
+          font-weight="900" font-size="520" text-anchor="middle" letter-spacing="-24">NP</text>
+    <circle cx="808" cy="768" r="44" fill="#FFE600"/>
+  </g>
+  <text x="1366" y="2300" fill="rgba(255,255,255,0.78)"
+        font-family="Helvetica, Arial, sans-serif"
+        font-weight="600" font-size="76" text-anchor="middle" letter-spacing="0">NP Commerce</text>
+</svg>
