@@ -505,23 +505,29 @@ export type ATTStatus =
  * behavioural tracking is allowed and whether the consent dialog should
  * be shown.
  *
- * Note: when the package
- * `@capacitor-community/app-tracking-transparency` is not installed
- * (current default), this returns `'unsupported'` and we treat the user
- * as having declined behavioural collection (privacy-first default).
+ * Note: when the package `@capgo/capacitor-app-tracking-transparency`
+ * is not installed (current default), this returns `'unsupported'` and
+ * we treat the user as having declined behavioural collection
+ * (privacy-first default).
  *
  * Phase 17 — to enable the actual native prompt, install:
- *   pnpm --filter web add @capacitor-community/app-tracking-transparency
+ *   pnpm --filter web add @capgo/capacitor-app-tracking-transparency
  *
  * then `pnpm cap sync` and the helper will start returning real values.
+ *
+ * Webpack note: the `webpackIgnore: true` directive tells the bundler
+ * to skip resolving this module at compile time — the import becomes
+ * a runtime `import()` that throws `Module not found` if the package
+ * isn't installed. The surrounding `try/catch` then returns
+ * `'unsupported'` (intended behaviour).
  */
 export async function getATTStatus(): Promise<ATTStatus> {
   if (getPlatform() !== 'ios') return 'unsupported';
   try {
     const mod = (await import(
-      /* @vite-ignore */
+      /* webpackIgnore: true */ /* @vite-ignore */
       // @ts-expect-error — optional peer dep; consumers install on demand
-      '@capacitor-community/app-tracking-transparency'
+      '@capgo/capacitor-app-tracking-transparency'
     )) as {
       AppTrackingTransparency: {
         getStatus: () => Promise<{ status: string }>;
@@ -550,9 +556,9 @@ export async function requestATTPermission(): Promise<ATTStatus> {
   if (getPlatform() !== 'ios') return 'unsupported';
   try {
     const mod = (await import(
-      /* @vite-ignore */
+      /* webpackIgnore: true */ /* @vite-ignore */
       // @ts-expect-error — optional peer dep
-      '@capacitor-community/app-tracking-transparency'
+      '@capgo/capacitor-app-tracking-transparency'
     )) as {
       AppTrackingTransparency: {
         requestPermission: () => Promise<{ status: string }>;

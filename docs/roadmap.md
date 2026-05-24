@@ -1148,7 +1148,7 @@ pnpm cap:open:android   # Android Studio → Run
 - [ ] Apple Developer Program ($99/y) + Google Play Console ($25)
 - [ ] Bundle ID + provisioning profile + signing key + APNs `.p8`
 - [ ] Capture screenshots 6.7"/12.9" iPad + Android phone+tablet
-- [ ] Install `@capacitor-community/app-tracking-transparency` +
+- [ ] Install `@capgo/capacitor-app-tracking-transparency` +
       `cap sync` (optional — adapter ทำงานแม้ไม่ install โดย fall back
       เป็น `'unsupported'`)
 - [ ] Submit for review → Apple 24-48h · Google 1-7d

@@ -515,7 +515,7 @@ PRD สำหรับการปรับ UX/UI + ไล่ฟังก์ช�
       PerformanceData)
   - [x] **17.2 App Tracking Transparency (ATT)**:
     - `lib/native.ts` → `getATTStatus()`, `requestATTPermission()`
-      (optional `@capacitor-community/app-tracking-transparency` — graceful
+      (optional `@capgo/capacitor-app-tracking-transparency` — graceful
       fallback `'unsupported'` ถ้ายังไม่ install)
     - `components/att-consent-gate.tsx` — pre-prompt sheet ก่อน Apple
       native dialog (lift opt-in rate); soft-decline เก็บใน `safeStorage`

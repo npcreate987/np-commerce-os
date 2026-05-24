@@ -59,7 +59,7 @@ Flow:
 **Plugin dependency** (optional, ติดตั้งเมื่อพร้อมเปิดใช้):
 
 ```bash
-pnpm --filter web add @capacitor-community/app-tracking-transparency
+pnpm --filter web add @capgo/capacitor-app-tracking-transparency
 pnpm --filter web exec cap sync
 ```
 
@@ -243,7 +243,7 @@ docs/store-listing/
 - **Order anonymization** instead of hard-delete (Thai e-Tax 5y
   retention) → ตอนนี้ cascade ลบหมด; ทำ Phase 17.x หลังจาก wallet/
   invoice ship
-- **`@capacitor-community/app-tracking-transparency`** ยังไม่ install
+- **`@capgo/capacitor-app-tracking-transparency`** ยังไม่ install
   → adapter `getATTStatus()` คืน `'unsupported'` ชั่วคราว → ATT gate
   ไม่ปรากฏใน iOS production จนกว่าจะ install + cap sync
 - **Sign in with Apple** — Apple บังคับใส่ถ้ามี social login อื่น แต่
