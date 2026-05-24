@@ -187,15 +187,23 @@ jobs:
             || (echo "buildId mismatch — manifest=${BUILD_ID} expected=${{ steps.meta.outputs.build_id }}"; exit 1)
 
       - name: Notify Sentry of release
+        # Non-blocking — Sentry release tagging is nice-to-have (helps tie
+        # stacktraces back to bundle) but not critical for OTA delivery.
+        # If it fails (token expired, network blip, etc.) the bundle is
+        # still live on R2 and clients still receive it.
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_WEB }}
+          RELEASE: live-${{ steps.meta.outputs.build_id }}
         run: |
-          npx @sentry/cli releases new "live-${{ steps.meta.outputs.build_id }}"
-          npx @sentry/cli releases set-commits "live-${{ steps.meta.outputs.build_id }}" --auto
-          npx @sentry/cli releases files "live-${{ steps.meta.outputs.build_id }}" upload-sourcemaps apps/web/out --validate || true
-          npx @sentry/cli releases finalize "live-${{ steps.meta.outputs.build_id }}"
+          # pnpm dlx ขุดจาก pnpm store (ไม่ใช้ npx เพราะ pnpm มี node_modules
+          # layout แบบ symlink ทำให้ binary lookup ของ npx fail)
+          pnpm dlx @sentry/cli@latest releases new "$RELEASE"
+          pnpm dlx @sentry/cli@latest releases set-commits "$RELEASE" --auto || true
+          pnpm dlx @sentry/cli@latest releases files "$RELEASE" upload-sourcemaps apps/web/out --validate || true
+          pnpm dlx @sentry/cli@latest releases finalize "$RELEASE"
 
       - name: Bundle artifact
         uses: actions/upload-artifact@v4
