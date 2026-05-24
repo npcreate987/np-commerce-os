@@ -1,23 +1,29 @@
-import { redirect } from 'next/navigation';
-import type { Metadata } from 'next';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 /**
  * Legacy `/feed/videos` route.
  *
- * Phase 12 promoted the TikTok-style reel to `/feed`, so this route now just
- * forwards any inbound link (deep-shared clips, old bookmarks, push
- * notifications) to the new home, preserving the `?v=<id>` deep-link param.
+ * Phase 12 promoted the TikTok-style reel to `/feed`, so this route now
+ * just forwards any inbound link (deep-shared clips, old bookmarks, push
+ * notifications) to the new home, preserving the `?v=<id>` deep-link
+ * param.
+ *
+ * Phase 18 — converted from server-side `redirect()` to client-side
+ * `router.replace()` so that the page can be statically exported for
+ * the OTA bundle. Server-side `searchParams` + `redirect()` cannot
+ * survive `output: 'export'`.
  */
-export const metadata: Metadata = {
-  title: 'NP — Feed',
-};
+export default function LegacyVideosRedirect(): null {
+  const router = useRouter();
+  const search = useSearchParams();
 
-interface PageProps {
-  searchParams?: { v?: string | string[] };
-}
+  useEffect(() => {
+    const v = search?.get('v');
+    router.replace(v ? `/feed?v=${encodeURIComponent(v)}` : '/feed');
+  }, [router, search]);
 
-export default function LegacyVideosRedirect({ searchParams }: PageProps): never {
-  const raw = searchParams?.v;
-  const v = Array.isArray(raw) ? raw[0] : raw;
-  redirect(v ? `/feed?v=${encodeURIComponent(v)}` : '/feed');
+  return null;
 }
