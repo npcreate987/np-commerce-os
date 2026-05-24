@@ -62,6 +62,16 @@ export class AuthService {
     if (!ok) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    // Phase 17 — block login when account is pending deletion. Surface
+    // a distinct error code so the web client can show the "restore
+    // account?" flow instead of a generic credential error.
+    if (user.deletionRequestedAt) {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_DELETION_PENDING',
+        message: 'Account is pending deletion. Restore via /me/account/deletion/cancel.',
+        purgeAt: user.deletionPurgeAt?.toISOString() ?? null,
+      });
+    }
     return this.toAuthResponse(user, await this.issueRefreshToken(user.id));
   }
 

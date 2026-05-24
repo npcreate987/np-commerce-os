@@ -9,6 +9,7 @@
  */
 
 import { GridIcon, HeartIcon, LockIcon, StoreIcon, VideoIcon } from '@/components/icons';
+import { nativeShare } from '@/lib/native';
 
 export type TabKey = 'videos' | 'private' | 'shop' | 'liked';
 
@@ -35,10 +36,5 @@ export function formatStat(n: number): string {
 export function shareProfile(displayName: string): void {
   const url = typeof window !== 'undefined' ? window.location.href : '';
   const title = `โปรไฟล์ของ ${displayName} ใน NP`;
-  if (typeof navigator !== 'undefined' && navigator.share) {
-    navigator.share({ title, url }).catch(() => undefined);
-  } else if (typeof navigator !== 'undefined') {
-    navigator.clipboard?.writeText(url).catch(() => undefined);
-    alert('คัดลอกลิงก์โปรไฟล์แล้ว');
-  }
+  void nativeShare({ title, url, dialogTitle: 'แชร์โปรไฟล์' });
 }

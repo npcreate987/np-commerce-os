@@ -225,6 +225,9 @@ export default function PrivacyPage(): JSX.Element {
         </div>
       </Card>
 
+      {/* ── Account deletion (Phase 17 — store compliance) ── */}
+      <AccountDeletionCard token={token} />
+
       {/* ── My events ── */}
       <Card>
         <CardHeader>
@@ -414,6 +417,151 @@ function Block({
       </p>
       {children}
     </div>
+  );
+}
+
+/**
+ * Phase 17 — Account deletion card.
+ *
+ * Surfaces a single in-app path from Privacy → "ลบบัญชี" → confirm.
+ * Reachable in 2 taps from /profile (per Google Play policy). The
+ * 30-day grace window is communicated explicitly so the user knows
+ * how to undo and what survives (orders, invoices).
+ */
+function AccountDeletionCard({ token }: { token: string }): JSX.Element {
+  const qc = useQueryClient();
+  const [step, setStep] = useState<'idle' | 'confirm'>('idle');
+  const [reason, setReason] = useState('');
+  const [flash, setFlash] = useState<string | null>(null);
+  const logout = useAuthStore((s) => s.clear);
+
+  const statusQ = useQuery({
+    queryKey: ['account', 'deletion'],
+    queryFn: () => api.account.deletionStatus(token),
+    enabled: !!token,
+  });
+
+  const requestM = useMutation({
+    mutationFn: () => api.account.requestDeletion(token, reason.trim() || undefined),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['account', 'deletion'] });
+      setFlash('ลบบัญชีเรียบร้อย — ยกเลิกได้ภายใน 30 วัน');
+      setStep('idle');
+      setReason('');
+      setTimeout(() => {
+        logout();
+        if (typeof window !== 'undefined') window.location.href = '/';
+      }, 3000);
+    },
+    onError: (e) => setFlash(e instanceof ApiError ? e.message : 'ไม่สำเร็จ'),
+  });
+
+  const cancelM = useMutation({
+    mutationFn: () => api.account.cancelDeletion(token),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['account', 'deletion'] });
+      setFlash('ยกเลิกการลบบัญชีแล้ว');
+      setTimeout(() => setFlash(null), 2500);
+    },
+  });
+
+  const status = statusQ.data;
+  const pending = status?.pending ?? false;
+  const purgeAt = status?.purgeAt ? new Date(status.purgeAt) : null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-rose-700">ลบบัญชีถาวร</CardTitle>
+      </CardHeader>
+      <div className="space-y-3 p-4 pt-0">
+        {flash ? (
+          <div
+            className={cn(
+              'rounded-2xl px-3 py-2 text-xs font-semibold ring-1',
+              flash.includes('สำเร็จ') || flash.includes('ยกเลิก')
+                ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                : 'bg-rose-50 text-rose-700 ring-rose-200',
+            )}
+          >
+            {flash}
+          </div>
+        ) : null}
+
+        {statusQ.isLoading ? (
+          <Skeleton className="h-20 rounded-2xl" />
+        ) : pending ? (
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-200">
+              <p className="text-sm font-semibold text-rose-800">
+                บัญชีของคุณรอลบถาวร
+              </p>
+              <p className="mt-1 text-[11px] text-rose-700">
+                จะลบทั้งหมดวันที่{' '}
+                {purgeAt?.toLocaleDateString('th-TH', {
+                  dateStyle: 'long',
+                }) ?? '—'}{' '}
+                · ยกเลิกได้ก่อนวันนั้น
+              </p>
+            </div>
+            <Button
+              onClick={() => cancelM.mutate()}
+              disabled={cancelM.isPending}
+              className="w-full"
+            >
+              {cancelM.isPending ? 'กำลังยกเลิก…' : 'ยกเลิก — เก็บบัญชีไว้'}
+            </Button>
+          </div>
+        ) : step === 'idle' ? (
+          <>
+            <p className="text-xs text-ink-600">
+              ลบบัญชี โปรไฟล์ ตะกร้า ที่อยู่ ของคุณถาวร · มีระยะรอ 30
+              วันให้กู้คืน หลังจากนั้นข้อมูลจะถูกลบจริง ออเดอร์/ใบกำกับ
+              ภาษีย้อนหลังจะถูกเก็บแบบไม่ระบุตัวตนตามกฎหมาย
+            </p>
+            <Button
+              variant="ghost"
+              onClick={() => setStep('confirm')}
+              className="text-rose-600"
+            >
+              ขอลบบัญชี
+            </Button>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-rose-700">
+              ยืนยันการลบบัญชีของคุณ
+            </p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value.slice(0, 500))}
+              placeholder="บอกเหตุผลให้เราด้วย (ไม่บังคับ) — ช่วยให้ NP ปรับปรุง"
+              rows={3}
+              className="w-full rounded-2xl border border-ink-100 bg-white px-3 py-2 text-xs"
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setStep('idle');
+                  setReason('');
+                }}
+                className="flex-1"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                onClick={() => requestM.mutate()}
+                disabled={requestM.isPending}
+                className="flex-1 bg-rose-500 hover:bg-rose-600"
+              >
+                {requestM.isPending ? 'กำลังลบ…' : 'ยืนยันลบ'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 

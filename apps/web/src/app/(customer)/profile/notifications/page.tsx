@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import {
   isPushSupported,
@@ -10,6 +10,11 @@ import {
   subscribeBrowserPush,
   unsubscribeBrowserPush,
 } from '@/lib/push';
+import {
+  getPushPermission,
+  isNative,
+  registerNativePush,
+} from '@/lib/native';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,8 +35,19 @@ export default function NotificationsSettingsPage(): JSX.Element {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   const [pushBusy, setPushBusy] = useState(false);
+  const [nativePushBusy, setNativePushBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [nativeResult, setNativeResult] = useState<string | null>(null);
+  const [nativePerm, setNativePerm] = useState<
+    'granted' | 'denied' | 'prompt' | 'unsupported'
+  >('unsupported');
+  const onNative = isNative();
+
+  useEffect(() => {
+    if (!onNative) return;
+    void getPushPermission().then(setNativePerm);
+  }, [onNative]);
 
   const configQ = useQuery({
     queryKey: ['notif-config'],
@@ -137,6 +153,30 @@ export default function NotificationsSettingsPage(): JSX.Element {
     }
   }
 
+  async function handleEnableNativePush(): Promise<void> {
+    if (!token) return;
+    setNativePushBusy(true);
+    setNativeResult(null);
+    try {
+      const result = await registerNativePush(token);
+      if (result) {
+        setNativeResult('เปิด push สำเร็จ — token ลงทะเบียนแล้ว');
+        await qc.invalidateQueries({ queryKey: ['notif-devices'] });
+        await getPushPermission().then(setNativePerm);
+      } else {
+        const perm = await getPushPermission();
+        setNativePerm(perm);
+        setNativeResult(
+          perm === 'denied'
+            ? 'ถูกบล็อก — เปิดการแจ้งเตือนจากการตั้งค่ามือถือ'
+            : 'ไม่สำเร็จ — ลองอีกครั้งหรือเช็คสัญญาณเน็ต',
+        );
+      }
+    } finally {
+      setNativePushBusy(false);
+    }
+  }
+
   async function handleTest(): Promise<void> {
     setTestBusy(true);
     try {
@@ -231,10 +271,39 @@ export default function NotificationsSettingsPage(): JSX.Element {
         </p>
       </header>
 
+      {/* Native push (Capacitor iOS/Android) — รากฐาน Phase 16 */}
+      {onNative ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>มือถือเครื่องนี้</CardTitle>
+          </CardHeader>
+          <p className="text-xs text-ink-600">
+            {nativePerm === 'granted'
+              ? 'การแจ้งเตือนเปิดอยู่ — ระบบจะส่ง push เมื่อมีออเดอร์ใหม่หรือโปรพิเศษ'
+              : nativePerm === 'denied'
+                ? 'ถูกบล็อก — เปิด "การตั้งค่า → แจ้งเตือน → NP Commerce" จากระบบมือถือ'
+                : 'เปิดเพื่อรับ push สำคัญ เช่น สถานะออเดอร์ จัดส่ง โปรลด'}
+          </p>
+          <div className="mt-3">
+            <Button
+              size="sm"
+              loading={nativePushBusy}
+              disabled={nativePerm === 'denied'}
+              onClick={handleEnableNativePush}
+            >
+              {nativePerm === 'granted' ? 'ลงทะเบียนใหม่' : 'เปิดการแจ้งเตือน'}
+            </Button>
+          </div>
+          {nativeResult ? (
+            <p className="mt-2 text-[11px] text-ink-500">{nativeResult}</p>
+          ) : null}
+        </Card>
+      ) : null}
+
       {/* Quick action: enable/disable web push on this device */}
       <Card>
         <CardHeader>
-          <CardTitle>เบราว์เซอร์นี้</CardTitle>
+          <CardTitle>{onNative ? 'เบราว์เซอร์' : 'เบราว์เซอร์นี้'}</CardTitle>
         </CardHeader>
         <p className="text-xs text-ink-600">
           {!supportsPush
