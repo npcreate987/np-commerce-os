@@ -1,0 +1,51 @@
+# Phase 19.2 -- keep the Docker build context lean.
+#
+# Without this file the build context balloons to several GB
+# (node_modules, .git, ios/android native projects, web's .next
+# cache, etc.) and every Railway deploy re-uploads it. The list
+# below trims it to a few MB of source.
+
+# Dependency caches (re-installed inside the image)
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+out
+**/out
+.next
+**/.next
+.turbo
+**/.turbo
+
+# VCS + tooling
+.git
+.github
+.gitignore
+.cursor
+.idea
+.vscode
+*.log
+
+# Native shells (huge, irrelevant to the API)
+ios
+android
+
+# Secrets and env files; the image must never bake these in --
+# Railway injects them at runtime as env vars.
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage
+**/coverage
+
+# Misc
+README.md
+docs
