@@ -119,7 +119,38 @@ async function bootstrap(): Promise<void> {
   // response (incl. error responses from Nest).
   const fastify = adapter.getInstance() as unknown as {
     addHook: (name: string, fn: (req: any, reply: any, done?: any) => void) => void;
+    addContentTypeParser: (
+      type: string,
+      opts: Record<string, unknown>,
+      parser: (
+        req: unknown,
+        body: string | Buffer,
+        done: (err: Error | null, parsed?: unknown) => void,
+      ) => void,
+    ) => void;
   };
+
+  // Phase 19 — Capture the raw JSON body so HMAC webhook receivers
+  // (live-updates `POST /webhook`) can verify the signature byte-for-byte.
+  // Fastify's default JSON parser drops the original bytes after parsing,
+  // which makes signature verification impossible without re-serializing
+  // (and re-serializing diverges from what the signer hashed when keys
+  // get re-ordered or whitespace differs). Override the JSON parser to
+  // (a) capture the raw string on `req.rawBody`, (b) JSON.parse normally.
+  fastify.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (req: any, body: string | Buffer, done) => {
+      const text = typeof body === 'string' ? body : body.toString('utf8');
+      try {
+        const parsed = text.length > 0 ? JSON.parse(text) : {};
+        req.rawBody = text;
+        done(null, parsed);
+      } catch (err) {
+        done(err as Error);
+      }
+    },
+  );
 
   // 1) Short-circuit OPTIONS preflight before Nest router
   fastify.addHook('onRequest', (req: any, reply: any, done: any) => {

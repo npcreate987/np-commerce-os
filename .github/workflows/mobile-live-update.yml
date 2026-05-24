@@ -24,8 +24,12 @@ name: mobile-live-update
 #   SENTRY_PROJECT_WEB             # javascript-nextjs (already used by Phase 13.1)
 #
 # Secrets (optional — ถ้าตั้งไว้จะ auto-update; ถ้าไม่ตั้ง emit ให้ user manual update):
-#   API_DEPLOY_HOOK_URL            # webhook to bump env vars on API host
-#   API_DEPLOY_HOOK_SECRET         # HMAC secret
+#   API_DEPLOY_HOOK_URL            # webhook to bump manifest on API host
+#                                  # = ${API_URL}/v1/app/live-updates/webhook
+#   LIVE_UPDATES_WEBHOOK_SECRET    # HMAC secret (SAME value as the API env var
+#                                  # of the same name — they sign+verify the
+#                                  # same bytes; rename them in lockstep on
+#                                  # any rotation)
 #   API_URL                        # https://api.example.com  (สำหรับ smoke test)
 
 on:
@@ -137,25 +141,33 @@ jobs:
           echo "bundle_url=$BUNDLE_URL" >> $GITHUB_OUTPUT
           echo "Bundle uploaded — $BUNDLE_URL"
 
-      - name: Bump API manifest env vars
+      - name: Bump API manifest via webhook
         if: env.API_DEPLOY_HOOK_URL != ''
-        env:
-          PAYLOAD: |
-            {
-              "channel": "${{ inputs.channel || 'beta' }}",
-              "version": "${{ steps.meta.outputs.version }}",
-              "buildId": "${{ steps.meta.outputs.build_id }}",
-              "url": "${{ steps.url.outputs.bundle_url }}",
-              "checksum": "${{ steps.pkg.outputs.checksum }}",
-              "size": ${{ steps.pkg.outputs.size }},
-              "rolloutPct": ${{ inputs.rollout_pct || '10' }}
-            }
+        # Build a *canonical* JSON payload (compact, no trailing newline)
+        # with jq so the HMAC bytes match what curl POSTs to the API
+        # byte-for-byte. Using `printf '%s'` for both signing and POSTing
+        # avoids `echo`'s trailing newline (which would shift the HMAC by
+        # 1 byte vs. what `--data-binary @-` actually sends).
+        #
+        # The API verifies the signature against `req.rawBody` captured by
+        # a Fastify content-type parser (see `apps/api/src/main.ts`), so
+        # any normalization (re-ordering keys, stripping whitespace) would
+        # break verification. Keep this step strictly raw.
         run: |
-          SIG=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.API_DEPLOY_HOOK_SECRET }}" | awk '{print $2}')
-          curl -fsSL -X POST \
+          PAYLOAD=$(jq -cn \
+            --arg channel "${{ inputs.channel || 'beta' }}" \
+            --arg version "${{ steps.meta.outputs.version }}" \
+            --arg buildId "${{ steps.meta.outputs.build_id }}" \
+            --arg url "${{ steps.url.outputs.bundle_url }}" \
+            --arg checksum "${{ steps.pkg.outputs.checksum }}" \
+            --argjson size ${{ steps.pkg.outputs.size }} \
+            --argjson rolloutPct ${{ inputs.rollout_pct || 10 }} \
+            '{channel:$channel, version:$version, buildId:$buildId, url:$url, checksum:$checksum, size:$size, rolloutPct:$rolloutPct}')
+          SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.LIVE_UPDATES_WEBHOOK_SECRET }}" | awk '{print $NF}')
+          printf '%s' "$PAYLOAD" | curl -fsSL -X POST \
             -H "Content-Type: application/json" \
             -H "X-NP-Signature: sha256=$SIG" \
-            -d "$PAYLOAD" \
+            --data-binary @- \
             "${{ secrets.API_DEPLOY_HOOK_URL }}"
 
       - name: Emit env vars (manual fallback when API hook ไม่ตั้ง)

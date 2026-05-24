@@ -308,9 +308,11 @@ Railway → Settings → Networking → Custom Domain
 
 ```bash
 # ตั้ง 3 secrets เพิ่มใน GitHub Actions
+# (note: LIVE_UPDATES_WEBHOOK_SECRET ใช้ชื่อเดียวกันทั้ง 2 ที่
+#  — GitHub Actions secret + API host env var ต้อง paste ค่าเดียวกัน)
 gh secret set API_URL --body "https://np-commerce-api-production.up.railway.app" --repo npcreate987/np-commerce-os
 gh secret set API_DEPLOY_HOOK_URL --body "https://np-commerce-api-production.up.railway.app/v1/app/live-updates/webhook" --repo npcreate987/np-commerce-os
-gh secret set API_DEPLOY_HOOK_SECRET --body "<value of LIVE_UPDATES_WEBHOOK_SECRET>" --repo npcreate987/np-commerce-os
+gh secret set LIVE_UPDATES_WEBHOOK_SECRET --body "<same 32-hex value paste'd on Railway>" --repo npcreate987/np-commerce-os
 ```
 
 ต่อจากนี้ — เวลา `mobile-live-update.yml` รัน + บรรลุ R2 upload → จะ POST webhook → API update env (in-memory cache) → manifest endpoint serve ค่าใหม่ทันที
@@ -327,57 +329,38 @@ NEXT_PUBLIC_LIVE_UPDATE_MANIFEST_URL=https://np-commerce-api-production.up.railw
 
 ## 6) Code changes needed before deploy
 
-### 6.1 Add webhook endpoint (NEW — must build)
+### 6.1 Add webhook endpoint ✅ DONE (Phase 19.1)
 
-ปัจจุบัน `apps/api/src/common/live-updates.controller.ts` มีแค่ `GET /manifest`. ต้องเพิ่ม
+`apps/api/src/common/live-updates.controller.ts` มี `POST /webhook` แล้ว
+- HMAC-SHA256 verify against `req.rawBody` (constant-time compare)
+- Zod schema validation
+- Returns 401 on bad sig, 400 on raw body missing, 200 on success
+- Reads secret from `LIVE_UPDATES_WEBHOOK_SECRET` env
 
-```ts
-@Post('webhook')
-@HttpCode(200)
-async webhook(
-  @Headers('x-np-signature') signature: string,
-  @Body() body: WebhookPayload,
-) {
-  const expected = computeHmacSha256(JSON.stringify(body), process.env.LIVE_UPDATES_WEBHOOK_SECRET);
-  if (`sha256=${expected}` !== signature) {
-    throw new UnauthorizedException('Invalid HMAC signature');
-  }
-  // store in in-memory cache + optionally persist to DB
-  this.cache.update(body);
-  return { ok: true, applied: body.buildId };
-}
-```
+### 6.2 In-memory cache override ✅ DONE (Phase 19.1)
 
-### 6.2 Add in-memory cache override (NEW)
+`apps/api/src/common/live-updates-cache.service.ts` เป็น `@Injectable()`
+service ที่ store per-channel overrides ใน `Map<channel, Override>`.
+Manifest endpoint อ่านจาก cache ก่อน, fall back เป็น env var ถ้าไม่มี.
 
-Manifest endpoint reads from cache first, falls back to env vars
+Limitation: in-memory only — cache หายเมื่อ API restart. Fallback กลับไป env
+var (which holds last-shipped bundle anyway). DB persistence = Phase 19.1.1
+(not blocking launch).
 
-```ts
-private readonly cache = new LiveUpdatesCacheService();
+### 6.3 Health check endpoint ✅ ALREADY EXISTS
 
-@Get('manifest')
-manifest(...) {
-  const override = this.cache.get();
-  const version = override?.version ?? process.env.LIVE_UPDATES_VERSION;
-  // ...
-}
-```
+`apps/api/src/common/health.controller.ts` มี `GET /health` → 200
+`{ status: 'ok', ts: ... }` พร้อมแล้ว — ไม่ต้องเพิ่ม
 
-Note: in-memory cache resets on service restart. สำหรับ persistence ระยะยาว ต้อง persist เข้า DB (1 table `LiveUpdatesConfig`) — แนะนำทำใน Phase 19.1 หลัง smoke test pass
+### 6.3.1 Raw body capture for HMAC ✅ DONE (Phase 19.1)
 
-### 6.3 Health check endpoint (NEW)
+`apps/api/src/main.ts` เพิ่ม Fastify content-type parser ที่ store `req.rawBody`
+ก่อน parse JSON. Required for byte-exact HMAC verification.
 
-Railway + monitoring tools ต้อง `/health` 200
+### 6.3.2 Unit tests ✅ DONE (Phase 19.1)
 
-```ts
-@Controller('health')
-export class HealthController {
-  @Get()
-  check() {
-    return { ok: true, ts: new Date().toISOString() };
-  }
-}
-```
+`apps/api/src/common/live-updates.spec.ts` — 13 tests สำหรับ cache + HMAC
+protocol. Pin the trailing-newline regression (echo vs printf).
 
 ### 6.4 CORS for mobile + landing (use WEB_ORIGIN env)
 
@@ -399,20 +382,22 @@ allowlist ข้างบนแล้ว
 
 ## 7) Pre-flight checklist (ก่อนกด deploy)
 
+- [x] Webhook endpoint added (section 6.1) — `POST /v1/app/live-updates/webhook`
+- [x] In-memory cache service added (section 6.2) — `LiveUpdatesCacheService`
+- [x] Health controller exists (section 6.3) — `GET /health`
+- [x] Raw body Fastify parser (section 6.3.1)
+- [x] Unit tests (section 6.3.2) — 13/13 pass
+- [x] CORS verified — env-driven via `WEB_ORIGIN`
 - [ ] Railway account created
 - [ ] Repo connected ใน Railway
 - [ ] Service root = `apps/api`
 - [ ] Postgres add-on linked
-- [ ] Webhook endpoint added (section 6.1)
-- [ ] In-memory cache service added (section 6.2)
-- [ ] Health controller added (section 6.3)
-- [ ] CORS verified ใน main.ts (section 6.4)
 - [ ] Env vars set (section Step 3)
 - [ ] Pre-deploy command = `pnpm --filter api prisma migrate deploy`
 - [ ] First deploy attempted + Railway URL captured
 - [ ] Health check 200
 - [ ] Manifest endpoint returns placeholder
-- [ ] Set 3 GitHub secrets (API_URL, API_DEPLOY_HOOK_URL, API_DEPLOY_HOOK_SECRET)
+- [ ] Set 3 GitHub secrets (`API_URL`, `API_DEPLOY_HOOK_URL`, `LIVE_UPDATES_WEBHOOK_SECRET`)
 - [ ] Trigger mobile-live-update workflow → webhook should fire
 - [ ] Verify manifest endpoint serves the new bundle metadata
 

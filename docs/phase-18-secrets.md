@@ -64,8 +64,8 @@
 | `R2_ENDPOINT_URL`               | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`                                | Account ID อยู่ใน dash URL หรือบน home page sidebar                     |
 | `R2_BUCKET`                     | `np-commerce-live-updates`                                                     | สร้างที่ dash → R2 Object Storage → Create bucket (เลือก APAC)         |
 | `R2_PUBLIC_BASE`                | `https://pub-<RANDOM>.r2.dev` (สำหรับ public download โดย client)              | bucket → Settings → Public Development URL → Allow Access              |
-| `API_DEPLOY_HOOK_URL`           | (optional) webhook URL บน API host สำหรับ bump env vars                        | จะใช้ตอน API deployed (Phase 19+) — ถ้าไม่ตั้ง workflow จะ emit ลง summary |
-| `API_DEPLOY_HOOK_SECRET`        | (optional) HMAC secret 32 chars สำหรับ verify webhook signature                | สร้างเอง — `openssl rand -hex 32`                                       |
+| `API_DEPLOY_HOOK_URL`           | (optional) webhook URL บน API host = `${API_URL}/v1/app/live-updates/webhook` | จะใช้ตอน API deployed (Phase 19+) — ถ้าไม่ตั้ง workflow จะ emit ลง summary |
+| `LIVE_UPDATES_WEBHOOK_SECRET`   | (optional) HMAC secret 32 chars สำหรับ verify webhook signature                | สร้างเอง — `openssl rand -hex 32`. **ต้อง paste ค่าเดียวกันที่ API host เป็น env var ชื่อเดียวกัน** |
 | `API_URL`                       | (optional) เช่น `https://api.example.com` สำหรับ smoke test manifest          | ตั้งเมื่อ API deployed                                                 |
 
 ### Pre-flight: ทดสอบ R2 credentials ก่อน paste
@@ -112,7 +112,7 @@ aws s3 ls --endpoint-url "$R2_ENDPOINT" s3://$R2_BUCKET/
 | `MATCH_PASSWORD`                | ทุกปี        | `match nuke + match init` ใหม่ (sync devs ทุกคน)              |
 | Keystore                        | ห้ามเปลี่ยน  | ใช้ตลอดอายุของแอป                                              |
 | `SENTRY_AUTH_TOKEN`             | 6 เดือน      | สร้างใหม่ → revoke เก่า                                       |
-| `API_DEPLOY_HOOK_SECRET`        | 3 เดือน      | rotate ทั้งฝั่ง API + workflow                                |
+| `LIVE_UPDATES_WEBHOOK_SECRET`   | 3 เดือน      | rotate ทั้ง 2 ที่ (GitHub Actions + API host env)              |
 
 ---
 

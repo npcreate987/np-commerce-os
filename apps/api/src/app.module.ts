@@ -37,6 +37,7 @@ import { HealthController } from './common/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { AppVersionController } from './common/app-version.controller';
 import { LiveUpdatesController } from './common/live-updates.controller';
+import { LiveUpdatesCacheService } from './common/live-updates-cache.service';
 
 @Module({
   imports: [
@@ -81,5 +82,6 @@ import { LiveUpdatesController } from './common/live-updates.controller';
     AppVersionController,
     LiveUpdatesController,
   ],
+  providers: [LiveUpdatesCacheService],
 })
 export class AppModule {}
