@@ -12,7 +12,14 @@
 // ตอน prod เปลี่ยน DATABASE_PROVIDER=postgresql + แปลง String → enum ผ่าน migration
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Phase 19.2 — Railway runs node:20-bookworm-slim which has OpenSSL
+  // 3.0. Listing both 1.1.x and 3.0.x targets means the generated
+  // client carries both query-engine binaries; the runtime picks the
+  // one that matches whatever libssl is actually installed. "native"
+  // stays so local dev on macOS / Linux Mint / Arch / etc. continues
+  // to work without re-running `prisma generate` for each host.
+  binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

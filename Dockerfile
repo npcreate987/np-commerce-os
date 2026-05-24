@@ -18,6 +18,19 @@
 
 FROM node:20-bookworm-slim
 
+# Phase 19.2 — install OpenSSL + ca-certificates explicitly. Bookworm
+# ships with OpenSSL 3.0 libraries but the `openssl` CLI is not in
+# the slim image, which prevents Prisma from detecting the host's
+# OpenSSL version during `prisma generate` (it then falls back to
+# the OpenSSL 1.1 query-engine binary and crashes at runtime looking
+# for libssl.so.1.1). Pinning ca-certificates also keeps HTTPS
+# connections from npm/GitHub/Prisma's CDN working during the build.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      openssl \
+      ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 # Corepack ships with Node 20 but pnpm is not active by default. We
 # pin to 9.0.0 to match the root package.json's packageManager field
 # byte-for-byte; any drift would invalidate pnpm-lock.yaml hashes.
