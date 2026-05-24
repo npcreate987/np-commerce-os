@@ -16,6 +16,9 @@ const isStatic = process.env.BUILD_STATIC === 'true';
 
 const nextConfig = {
   reactStrictMode: true,
+  // Disable ESLint during `next build` — lint errors should be caught by
+  // a dedicated CI lint step, not block production image builds.
+  eslint: { ignoreDuringBuilds: true },
   // BUILD_STATIC=true → output: 'export' สำหรับ Capacitor (bundle ลง iOS/Android)
   // Phase 16.x — ก่อน static export จะสำเร็จเต็มรูปแบบ ต้อง refactor
   // (creator)/layout.tsx, (rider)/layout.tsx ฯลฯ ให้เป็น server component
@@ -26,7 +29,6 @@ const nextConfig = {
     ? {
         output: 'export',
         images: { unoptimized: true },
-        eslint: { ignoreDuringBuilds: true },
         trailingSlash: true,
       }
     : {}),
