@@ -1,0 +1,74 @@
+{
+	"appId": "app.np.commerce",
+	"appName": "NP Commerce",
+	"webDir": "out",
+	"loggingBehavior": "debug",
+	"ios": {
+		"contentInset": "always",
+		"backgroundColor": "#ffffff",
+		"limitsNavigationsToAppBoundDomains": false,
+		"scheme": "NPCommerce"
+	},
+	"android": {
+		"backgroundColor": "#ffffff",
+		"allowMixedContent": true,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": true
+	},
+	"server": {
+		"androidScheme": "https",
+		"iosScheme": "capacitor",
+		"allowNavigation": [
+			"np.app",
+			"*.np.app",
+			"api.np.app"
+		]
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 1200,
+			"launchAutoHide": true,
+			"backgroundColor": "#FF3E5C",
+			"androidSplashResourceName": "splash",
+			"androidScaleType": "CENTER_CROP",
+			"showSpinner": false,
+			"splashFullScreen": true,
+			"splashImmersive": true
+		},
+		"StatusBar": {
+			"style": "DARK",
+			"backgroundColor": "#FF3E5C",
+			"overlaysWebView": false
+		},
+		"PushNotifications": {
+			"presentationOptions": [
+				"badge",
+				"sound",
+				"alert"
+			]
+		},
+		"App": {
+			"launchUrl": ""
+		},
+		"Preferences": {
+			"group": "NPCommercePrefs"
+		},
+		"Camera": {},
+		"Geolocation": {}
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"CAPBrowserPlugin",
+		"CAPCameraPlugin",
+		"DevicePlugin",
+		"GeolocationPlugin",
+		"CAPNetworkPlugin",
+		"PreferencesPlugin",
+		"PushNotificationsPlugin",
+		"SharePlugin",
+		"SplashScreenPlugin",
+		"StatusBarPlugin",
+		"CapacitorUpdaterPlugin",
+		"SentryCapacitorPlugin"
+	]
+}

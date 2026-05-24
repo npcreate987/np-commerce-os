@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Phase 16 — iOS capabilities
+
+		1) Universal Links (aps-environment + applinks)
+		   Apple ตรวจ AASA file ที่ https://np.app/.well-known/apple-app-site-association
+		   ดูว่าตรง bundle ID ของแอป (TEAMID.app.np.commerce) ไหม
+		   ก่อน first prod build ต้อง:
+		     - แทน "applinks:np.app" ด้วยโดเมนจริงของเรา
+		     - เปลี่ยน aps-environment เป็น "production" (Xcode → Signing &
+		       Capabilities → Push Notifications → Production)
+
+		2) APNs (aps-environment)
+		   "development" สำหรับ TestFlight + simulator
+		   "production" สำหรับ store build จริง — เปลี่ยนตอน archive
+
+		3) Associated Domain
+		   หลายโดเมนได้: applinks:np.app, applinks:*.np.app
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:np.app</string>
+		<string>applinks:app.np.app</string>
+		<string>webcredentials:np.app</string>
+	</array>
+
+	<!-- Keychain access group for shared credentials (used by Capacitor Preferences when group is set) -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)app.np.commerce</string>
+	</array>
+</dict>
+</plist>

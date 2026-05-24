@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAMIDXXXX.app.np.commerce"],
+        "components": [
+          { "/": "/order/*", "comment": "Order detail deep-link" },
+          { "/": "/product/*", "comment": "Product detail deep-link" },
+          { "/": "/shop/*", "comment": "Shop home deep-link" },
+          { "/": "/feed", "comment": "Video feed" },
+          { "/": "/feed", "?": { "v": "*" }, "comment": "Specific clip" },
+          { "/": "/cart", "comment": "Cart" },
+          { "/": "/orders", "comment": "Orders list" },
+          { "/": "/r/*", "comment": "Referral / Creator short link" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["TEAMIDXXXX.app.np.commerce"]
+  }
+}

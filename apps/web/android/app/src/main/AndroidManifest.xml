@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+                Phase 16 — Android App Links (autoVerify=true)
+                ก่อนเปิดใช้งานจริง ต้อง:
+                  1) Replace "np.app" ด้วยโดเมน production
+                  2) วาง /.well-known/assetlinks.json ที่โดเมนนั้น ผ่าน HTTPS
+                     พร้อม SHA-256 ของ Play App Signing fingerprint
+                  3) Build APK/AAB แล้ว Play Console จะ verify อัตโนมัติ
+                Documentation:
+                  https://developer.android.com/training/app-links/verify-android-applinks
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="np.app" />
+                <data android:host="app.np.app" />
+            </intent-filter>
+
+            <!-- Custom URL scheme สำหรับ OAuth redirect / partner share -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="npcommerce" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+    <!-- ====================================================================== -->
+    <!-- Phase 16 — Permissions                                                  -->
+    <!-- ====================================================================== -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Network status (Capacitor Network plugin) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Push notifications (Capacitor PushNotifications via FCM) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Location (Capacitor Geolocation — Local Commerce + Rider) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Rider background tracking — request only when role=RIDER + active job -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Camera (Capacitor Camera — video composer + future KYC) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Photo Library on Android 13+ — granular media permissions -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+    <!-- Biometric (Phase 16.x — payment confirm) -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- Vibrate on push action (notification feedback) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Required hardware (Play Console filters) -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!-- Queries (Android 11+ visibility) — needed to share/open external apps -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+</manifest>
