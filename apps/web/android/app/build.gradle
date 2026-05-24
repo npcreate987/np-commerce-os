@@ -16,9 +16,30 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Phase 18 — release signing reads from env (CI: GitHub Actions injects;
+    // local dev: source ~/keystores/np-commerce-vault.env before `gradlew assembleRelease`).
+    // Fastlane uses `android.injected.signing.*` gradle properties to override
+    // these at CI time; the block below is the fallback for local builds.
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+            def storePass    = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            def alias        = System.getenv("ANDROID_KEY_ALIAS")
+            def keyPass      = System.getenv("ANDROID_KEY_PASSWORD")
+            if (keystorePath && file(keystorePath).exists()) {
+                storeFile     file(keystorePath)
+                storePassword storePass
+                keyAlias      alias
+                keyPassword   keyPass
+            }
+        }
+    }
     buildTypes {
         release {
+            // Keep minify off for first release to keep mapping noise out of
+            // Sentry smoke test. Phase 19 will enable R8 + ProGuard rules.
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

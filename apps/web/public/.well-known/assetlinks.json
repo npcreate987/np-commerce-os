@@ -8,6 +8,7 @@
       "namespace": "android_app",
       "package_name": "app.np.commerce",
       "sha256_cert_fingerprints": [
+        "6E:55:D7:44:A3:84:96:DC:1F:17:00:8A:EC:AF:50:52:C8:D9:A4:C9:0F:B2:60:30:93:99:DD:DF:C0:68:C2:EB",
         "REPLACE_WITH_PLAY_APP_SIGNING_SHA256_AFTER_FIRST_RELEASE"
       ]
     }
