@@ -154,29 +154,8 @@ async function bootstrap(): Promise<void> {
         done: (err: Error | null, parsed?: unknown) => void,
       ) => void,
     ) => void;
+    removeContentTypeParser: (type: string | string[]) => void;
   };
-
-  // Phase 19 — Capture the raw JSON body so HMAC webhook receivers
-  // (live-updates `POST /webhook`) can verify the signature byte-for-byte.
-  // Fastify's default JSON parser drops the original bytes after parsing,
-  // which makes signature verification impossible without re-serializing
-  // (and re-serializing diverges from what the signer hashed when keys
-  // get re-ordered or whitespace differs). Override the JSON parser to
-  // (a) capture the raw string on `req.rawBody`, (b) JSON.parse normally.
-  fastify.addContentTypeParser(
-    'application/json',
-    { parseAs: 'string' },
-    (req: any, body: string | Buffer, done) => {
-      const text = typeof body === 'string' ? body : body.toString('utf8');
-      try {
-        const parsed = text.length > 0 ? JSON.parse(text) : {};
-        req.rawBody = text;
-        done(null, parsed);
-      } catch (err) {
-        done(err as Error);
-      }
-    },
-  );
 
   // 1) Short-circuit OPTIONS preflight before Nest router
   fastify.addHook('onRequest', (req: any, reply: any, done: any) => {
@@ -227,6 +206,40 @@ async function bootstrap(): Promise<void> {
   });
 
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter);
+
+  // Phase 19.2 — Replace Nest's default JSON parser with ours so we can
+  // capture req.rawBody (HMAC verification in `live-updates.controller`
+  // needs byte-exact body). Sequence matters:
+  //   1. NestFactory.create constructs the app but does NOT init yet.
+  //   2. app.init() runs NestApplication.registerParserMiddleware which
+  //      calls fastify.addContentTypeParser('application/json', …) with
+  //      its own default. After this call the parser slot is occupied.
+  //   3. removeContentTypeParser('application/json') frees the slot.
+  //   4. We re-register our parser, identical semantics (parseAs:
+  //      'string' + JSON.parse) plus stashing the raw text on
+  //      req.rawBody.
+  //   5. app.listen() will call init() again, find it's already
+  //      initialised, and short-circuit -- so our parser stays in
+  //      place.
+  //
+  // Without step 3 Fastify throws FST_ERR_CTP_ALREADY_PRESENT and the
+  // whole process exits before listen() ever runs.
+  await app.init();
+  fastify.removeContentTypeParser('application/json');
+  fastify.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (req: any, body: string | Buffer, done) => {
+      const text = typeof body === 'string' ? body : body.toString('utf8');
+      try {
+        const parsed = text.length > 0 ? JSON.parse(text) : {};
+        req.rawBody = text;
+        done(null, parsed);
+      } catch (err) {
+        done(err as Error);
+      }
+    },
+  );
 
   app.setGlobalPrefix('v1');
   app.useGlobalFilters(new AllExceptionsFilter());
