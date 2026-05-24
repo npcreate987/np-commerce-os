@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 /**
@@ -13,10 +13,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
  *
  * Phase 18 — converted from server-side `redirect()` to client-side
  * `router.replace()` so that the page can be statically exported for
- * the OTA bundle. Server-side `searchParams` + `redirect()` cannot
- * survive `output: 'export'`.
+ * the OTA bundle. The Next.js 14 prerender pipeline requires that any
+ * client hook reading the URL (e.g. `useSearchParams()`) live below a
+ * `<Suspense>` boundary; otherwise CSR bailout aborts static export.
  */
-export default function LegacyVideosRedirect(): null {
+function VideosRedirector(): null {
   const router = useRouter();
   const search = useSearchParams();
 
@@ -26,4 +27,12 @@ export default function LegacyVideosRedirect(): null {
   }, [router, search]);
 
   return null;
+}
+
+export default function LegacyVideosRedirect(): JSX.Element {
+  return (
+    <Suspense fallback={null}>
+      <VideosRedirector />
+    </Suspense>
+  );
 }
