@@ -2,9 +2,9 @@
 ALTER TABLE "orders" ADD COLUMN "carrierCode" TEXT;
 
 -- AlterTable
-ALTER TABLE "users" ADD COLUMN "deletionPurgeAt" DATETIME;
+ALTER TABLE "users" ADD COLUMN "deletionPurgeAt" TIMESTAMP(3);
 ALTER TABLE "users" ADD COLUMN "deletionReason" TEXT;
-ALTER TABLE "users" ADD COLUMN "deletionRequestedAt" DATETIME;
+ALTER TABLE "users" ADD COLUMN "deletionRequestedAt" TIMESTAMP(3);
 
 -- CreateTable
 CREATE TABLE "wallets" (
@@ -12,8 +12,8 @@ CREATE TABLE "wallets" (
     "userId" TEXT NOT NULL,
     "availableCents" INTEGER NOT NULL DEFAULT 0,
     "pendingCents" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -24,7 +24,7 @@ CREATE TABLE "wallet_entries" (
     "amountCents" INTEGER NOT NULL,
     "orderId" TEXT,
     "description" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "wallet_entries_walletId_fkey" FOREIGN KEY ("walletId") REFERENCES "wallets" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -39,8 +39,8 @@ CREATE TABLE "carriers" (
     "perKgCents" INTEGER NOT NULL DEFAULT 1500,
     "etaText" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -53,8 +53,8 @@ CREATE TABLE "shipments" (
     "costCents" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'LABEL_CREATED',
     "events" TEXT NOT NULL DEFAULT '[]',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "shipments_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "orders" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "shipments_carrierId_fkey" FOREIGN KEY ("carrierId") REFERENCES "carriers" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -67,8 +67,8 @@ CREATE TABLE "disputes" (
     "reason" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "evidenceJson" TEXT NOT NULL DEFAULT '[]',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "disputes_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "orders" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -79,7 +79,7 @@ CREATE TABLE "dispute_messages" (
     "authorId" TEXT NOT NULL,
     "authorRole" TEXT NOT NULL,
     "body" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "dispute_messages_disputeId_fkey" FOREIGN KEY ("disputeId") REFERENCES "disputes" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -95,8 +95,8 @@ CREATE TABLE "creator_profiles" (
     "defaultCommissionBps" INTEGER NOT NULL DEFAULT 500,
     "totalSalesCents" INTEGER NOT NULL DEFAULT 0,
     "totalCommissionCents" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -111,8 +111,8 @@ CREATE TABLE "creator_links" (
     "clickCount" INTEGER NOT NULL DEFAULT 0,
     "conversionCount" INTEGER NOT NULL DEFAULT 0,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "creator_links_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "creator_profiles" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -123,7 +123,7 @@ CREATE TABLE "affiliate_clicks" (
     "fingerprint" TEXT,
     "ua" TEXT,
     "refererUrl" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "affiliate_clicks_linkId_fkey" FOREIGN KEY ("linkId") REFERENCES "creator_links" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -138,8 +138,8 @@ CREATE TABLE "affiliate_attributions" (
     "commissionBps" INTEGER NOT NULL,
     "commissionCents" INTEGER NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "releasedAt" DATETIME,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "releasedAt" TIMESTAMP(3),
     CONSTRAINT "affiliate_attributions_linkId_fkey" FOREIGN KEY ("linkId") REFERENCES "creator_links" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
@@ -159,8 +159,8 @@ CREATE TABLE "local_stores" (
     "active" BOOLEAN NOT NULL DEFAULT true,
     "baseDeliveryCents" INTEGER NOT NULL DEFAULT 3500,
     "perKmCents" INTEGER NOT NULL DEFAULT 800,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -169,7 +169,7 @@ CREATE TABLE "menu_categories" (
     "shopId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "sort" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -186,11 +186,11 @@ CREATE TABLE "time_slots" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shopId" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
-    "startsAt" DATETIME NOT NULL,
-    "endsAt" DATETIME NOT NULL,
+    "startsAt" TIMESTAMP(3) NOT NULL,
+    "endsAt" TIMESTAMP(3) NOT NULL,
     "capacity" INTEGER NOT NULL DEFAULT 5,
     "taken" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -204,8 +204,8 @@ CREATE TABLE "riders" (
     "lng" REAL,
     "totalDeliveries" INTEGER NOT NULL DEFAULT 0,
     "totalEarningsCents" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -223,11 +223,11 @@ CREATE TABLE "delivery_jobs" (
     "distanceKm" REAL NOT NULL DEFAULT 0,
     "riderFeeCents" INTEGER NOT NULL DEFAULT 0,
     "noteJson" TEXT NOT NULL DEFAULT '[]',
-    "assignedAt" DATETIME,
-    "pickedUpAt" DATETIME,
-    "deliveredAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "assignedAt" TIMESTAMP(3),
+    "pickedUpAt" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "delivery_jobs_riderId_fkey" FOREIGN KEY ("riderId") REFERENCES "riders" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
@@ -245,11 +245,11 @@ CREATE TABLE "coupons" (
     "totalLimit" INTEGER NOT NULL DEFAULT 0,
     "perUserLimit" INTEGER NOT NULL DEFAULT 1,
     "used" INTEGER NOT NULL DEFAULT 0,
-    "startsAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "endsAt" DATETIME,
+    "startsAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endsAt" TIMESTAMP(3),
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -259,7 +259,7 @@ CREATE TABLE "coupon_redemptions" (
     "userId" TEXT NOT NULL,
     "orderId" TEXT,
     "discountCents" INTEGER NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "coupon_redemptions_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES "coupons" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -270,8 +270,8 @@ CREATE TABLE "loyalty_accounts" (
     "points" INTEGER NOT NULL DEFAULT 0,
     "lifetimePoints" INTEGER NOT NULL DEFAULT 0,
     "tier" TEXT NOT NULL DEFAULT 'BRONZE',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -283,7 +283,7 @@ CREATE TABLE "loyalty_entries" (
     "refType" TEXT,
     "refId" TEXT,
     "note" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "loyalty_entries_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "loyalty_accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -295,7 +295,7 @@ CREATE TABLE "referrals" (
     "rewardPoints" INTEGER NOT NULL DEFAULT 50,
     "inviteeRewardPoints" INTEGER NOT NULL DEFAULT 50,
     "uses" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -304,8 +304,8 @@ CREATE TABLE "referral_claims" (
     "referralId" TEXT NOT NULL,
     "inviteeId" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
-    "rewardedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "rewardedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "referral_claims_referralId_fkey" FOREIGN KEY ("referralId") REFERENCES "referrals" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -319,11 +319,11 @@ CREATE TABLE "campaigns" (
     "value" INTEGER NOT NULL DEFAULT 0,
     "metaJson" TEXT NOT NULL DEFAULT '{}',
     "bannerUrl" TEXT,
-    "startsAt" DATETIME NOT NULL,
-    "endsAt" DATETIME NOT NULL,
+    "startsAt" TIMESTAMP(3) NOT NULL,
+    "endsAt" TIMESTAMP(3) NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -334,7 +334,7 @@ CREATE TABLE "campaign_products" (
     "flashPriceCents" INTEGER,
     "stockCap" INTEGER NOT NULL DEFAULT 0,
     "sold" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -352,8 +352,8 @@ CREATE TABLE "video_posts" (
     "comments" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "score" REAL NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -362,7 +362,7 @@ CREATE TABLE "video_reactions" (
     "videoId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "kind" TEXT NOT NULL DEFAULT 'LIKE',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "video_reactions_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "video_posts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -377,10 +377,10 @@ CREATE TABLE "broadcasts" (
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "sentCount" INTEGER NOT NULL DEFAULT 0,
     "failedCount" INTEGER NOT NULL DEFAULT 0,
-    "scheduledAt" DATETIME,
-    "sentAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "scheduledAt" TIMESTAMP(3),
+    "sentAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -392,7 +392,7 @@ CREATE TABLE "inapp_messages" (
     "body" TEXT NOT NULL,
     "ctaJson" TEXT NOT NULL DEFAULT '{}',
     "read" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateIndex

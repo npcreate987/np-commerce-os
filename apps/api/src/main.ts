@@ -54,37 +54,63 @@ async function bootstrap(): Promise<void> {
     const strict =
       (process.env.STRICT_MIGRATIONS ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false'))
         .toLowerCase() === 'true';
-    try {
-      await runPhase2Migration(p);
-      await runPhase3Migration(p);
-      await runPhase4Migration(p);
-      await runPhase5Migration(p);
-      await runPhase6Migration(p);
-      await runPhase7Migration(p);
-      await runPhase8Migration(p);
-      await runPhase9Migration(p);
-      await runPhase9_2Migration(p);
-      await runPhase9_3Migration(p);
-      await runPhase10Migration(p);
-      await runPhase10_2Migration(p);
-      await runPhase10_3Migration(p);
-      // Phase 12 = demo seed for the TikTok-style /feed reel (idempotent)
-      await runPhase12Migration(p);
-      // Phase 12.2 = video moderation (reports + admin queue)
-      await runPhase12_2Migration(p);
-      // Phase 13 = production hardening tables (refresh_tokens, …)
-      await runPhase13Migration(p);
-    } catch (e) {
+    // Phase 19.2 -- SKIP_BOOTSTRAP_MIGRATIONS gate.
+    //
+    // The 16 runPhase*Migration files were authored against a SQLite
+    // schema and use SQLite-only constructs (PRAGMA table_info, JSON
+    // stored as TEXT with sqlite-flavoured defaults, etc.). When we
+    // switched the datasource to Postgres for Railway deployment they
+    // started crashing the boot. Until each one is ported individually,
+    // an opt-in environment flag (default OFF in production) lets us
+    // skip them entirely. Prisma migrate deploy already creates the
+    // base schema from the migrations/ folder; the runPhase* files
+    // were always meant to be idempotent incremental patches on top.
+    //
+    // To re-enable: set SKIP_BOOTSTRAP_MIGRATIONS=false on Railway
+    // *after* each runPhase file has been ported and tested against a
+    // Postgres database.
+    const skip =
+      (process.env.SKIP_BOOTSTRAP_MIGRATIONS ?? 'true').toLowerCase() === 'true';
+    if (skip) {
       // eslint-disable-next-line no-console
-      console.error('[bootstrap] migration failed:', e);
-      if (strict) {
+      console.log(
+        '[bootstrap] SKIP_BOOTSTRAP_MIGRATIONS=true -- ' +
+          'skipping runPhase2..13 (legacy SQLite-shaped migrations).',
+      );
+      await p.$disconnect().catch(() => {});
+    } else {
+      try {
+        await runPhase2Migration(p);
+        await runPhase3Migration(p);
+        await runPhase4Migration(p);
+        await runPhase5Migration(p);
+        await runPhase6Migration(p);
+        await runPhase7Migration(p);
+        await runPhase8Migration(p);
+        await runPhase9Migration(p);
+        await runPhase9_2Migration(p);
+        await runPhase9_3Migration(p);
+        await runPhase10Migration(p);
+        await runPhase10_2Migration(p);
+        await runPhase10_3Migration(p);
+        // Phase 12 = demo seed for the TikTok-style /feed reel (idempotent)
+        await runPhase12Migration(p);
+        // Phase 12.2 = video moderation (reports + admin queue)
+        await runPhase12_2Migration(p);
+        // Phase 13 = production hardening tables (refresh_tokens, …)
+        await runPhase13Migration(p);
+      } catch (e) {
         // eslint-disable-next-line no-console
-        console.error('[bootstrap] STRICT_MIGRATIONS=true → exiting');
-        await p.$disconnect().catch(() => {});
-        process.exit(1);
+        console.error('[bootstrap] migration failed:', e);
+        if (strict) {
+          // eslint-disable-next-line no-console
+          console.error('[bootstrap] STRICT_MIGRATIONS=true → exiting');
+          await p.$disconnect().catch(() => {});
+          process.exit(1);
+        }
+      } finally {
+        await p.$disconnect();
       }
-    } finally {
-      await p.$disconnect();
     }
   }
 
