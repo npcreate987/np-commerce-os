@@ -1,19 +1,25 @@
-'use client';
-
 /**
- * Phase 14.3 — Product Detail Page router.
+ * Phase 18 — Static-export shim for OTA bundle.
  *
- * Switches between the original phone-sized PDP (`MobilePDP`) and a
- * Shopify-style 2-col desktop (`DesktopPDP`) based on `useIsDesktop()`.
- * Each variant owns its own data fetching; React Query dedupes by
- * `['product', id]` key so swapping form factor never re-hits the API.
+ * Next.js `output: 'export'` requires every dynamic leaf segment to
+ * enumerate its params at build time via `generateStaticParams()`.
+ * For an OTA bundle that ships in a Capacitor WebView and uses
+ * client-side routing exclusively, the static HTML at "`/_`" is never
+ * actually loaded — the placeholder exists only to satisfy the
+ * exporter. Real navigation happens via React/Next.js Link components
+ * and the underlying `page.client.tsx` reads the param at runtime
+ * via `useParams()`.
+ *
+ * Adding new IDs at runtime works because Capacitor never round-trips
+ * to a static file — the WebView keeps the initial JS context and
+ * reroutes in-memory.
  */
+import ClientPage from './page.client';
 
-import { useIsDesktop } from '@/lib/use-responsive';
-import { MobilePDP } from './_mobile';
-import { DesktopPDP } from './_desktop';
+export function generateStaticParams() {
+  return [{ id: '_' }];
+}
 
-export default function ProductDetailPage(): JSX.Element {
-  const isDesktop = useIsDesktop();
-  return isDesktop ? <DesktopPDP /> : <MobilePDP />;
+export default function Page() {
+  return <ClientPage />;
 }

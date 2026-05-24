@@ -1,18 +1,25 @@
-'use client';
-
 /**
- * Phase 14.5 — Order detail router.
+ * Phase 18 — Static-export shim for OTA bundle.
  *
- * Mobile: sticky glass header + container-mobile detail.
- * Desktop: Gmail-style split-pane with the list on the left and the
- *          full detail on the right (matches `/orders` desktop chrome).
+ * Next.js `output: 'export'` requires every dynamic leaf segment to
+ * enumerate its params at build time via `generateStaticParams()`.
+ * For an OTA bundle that ships in a Capacitor WebView and uses
+ * client-side routing exclusively, the static HTML at "`/_`" is never
+ * actually loaded — the placeholder exists only to satisfy the
+ * exporter. Real navigation happens via React/Next.js Link components
+ * and the underlying `page.client.tsx` reads the param at runtime
+ * via `useParams()`.
+ *
+ * Adding new IDs at runtime works because Capacitor never round-trips
+ * to a static file — the WebView keeps the initial JS context and
+ * reroutes in-memory.
  */
+import ClientPage from './page.client';
 
-import { useIsDesktop } from '@/lib/use-responsive';
-import { MobileOrderDetail } from './_mobile';
-import { DesktopOrderDetail } from './_desktop';
+export function generateStaticParams() {
+  return [{ id: '_' }];
+}
 
-export default function OrderDetailPage(): JSX.Element {
-  const isDesktop = useIsDesktop();
-  return isDesktop ? <DesktopOrderDetail /> : <MobileOrderDetail />;
+export default function Page() {
+  return <ClientPage />;
 }
