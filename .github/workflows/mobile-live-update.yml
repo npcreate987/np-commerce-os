@@ -3,26 +3,30 @@ name: mobile-live-update
 # Phase 18 — Capacitor Live Updates (OTA) publisher.
 #
 # Trigger: push tag `live-v*` หรือ manual dispatch.
-# Output: zip ของ `apps/web/out/` + sha256 → upload S3 + update manifest env vars.
+# Output: zip ของ `apps/web/out/` + sha256 → upload Cloudflare R2 + bump manifest.
 #
 # Flow:
 #   1) Build static export (Next.js)
 #   2) Hash + zip → `web-bundle-<sha>.zip`
-#   3) Upload S3 (versioned bucket, immutable URL)
-#   4) PATCH manifest env vars บน API host (LIVE_UPDATES_*)
+#   3) Upload Cloudflare R2 (S3-compatible API, versioned + immutable URL)
+#   4) PATCH manifest env vars บน API host (optional — skipped ถ้า hook URL ไม่ set)
 #   5) Smoke test: hit `/v1/app/live-updates/manifest` แล้วยืนยันค่า
+#   6) Job summary: emit env vars สำหรับ manual update (เผื่อ API ยังไม่ deploy)
 #
-# Secrets:
-#   AWS_ACCESS_KEY_ID
-#   AWS_SECRET_ACCESS_KEY
-#   AWS_REGION                     # ap-southeast-1
-#   LIVE_UPDATES_S3_BUCKET         # np-app-live-updates
-#   LIVE_UPDATES_CDN_BASE          # https://cdn.np.app/bundles
-#   API_DEPLOY_HOOK_URL            # webhook to bump env vars on API host
-#   API_DEPLOY_HOOK_SECRET         # HMAC secret
+# Secrets (ต้องมี):
+#   R2_ACCESS_KEY_ID               # Cloudflare R2 API token — Object Read & Write
+#   R2_SECRET_ACCESS_KEY
+#   R2_ENDPOINT_URL                # https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+#   R2_BUCKET                      # np-commerce-live-updates
+#   R2_PUBLIC_BASE                 # https://pub-<RANDOM>.r2.dev  (public dev URL)
 #   SENTRY_AUTH_TOKEN
 #   SENTRY_ORG
-#   SENTRY_PROJECT_WEB             # np-commerce-web (already used by Phase 13.1)
+#   SENTRY_PROJECT_WEB             # javascript-nextjs (already used by Phase 13.1)
+#
+# Secrets (optional — ถ้าตั้งไว้จะ auto-update; ถ้าไม่ตั้ง emit ให้ user manual update):
+#   API_DEPLOY_HOOK_URL            # webhook to bump env vars on API host
+#   API_DEPLOY_HOOK_SECRET         # HMAC secret
+#   API_URL                        # https://api.example.com  (สำหรับ smoke test)
 
 on:
   push:
@@ -54,6 +58,11 @@ jobs:
     environment:
       name: ota-${{ inputs.channel || 'beta' }}
     timeout-minutes: 30
+    env:
+      # Expose optional secrets as env vars เพื่อให้ `if:` ตรวจ "ถูกตั้ง?" ได้
+      # (GitHub Actions ห้ามใช้ `secrets.X` ใน step-level `if:` แบบตรงๆ ในบาง runner)
+      API_DEPLOY_HOOK_URL: ${{ secrets.API_DEPLOY_HOOK_URL }}
+      API_URL: ${{ secrets.API_URL }}
 
     steps:
       - name: Checkout
@@ -105,28 +114,38 @@ jobs:
           echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
           echo "size=$SIZE" >> $GITHUB_OUTPUT
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Upload to S3 (versioned + immutable)
+      - name: Upload to Cloudflare R2 (versioned + immutable)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # R2 ไม่มี region จริง — ตั้ง 'auto' ตาม Cloudflare docs ก็พอ
+          # https://developers.cloudflare.com/r2/api/s3/tokens/#aws-cli
         run: |
           aws s3 cp \
             "${{ steps.pkg.outputs.bundle }}" \
-            "s3://${{ secrets.LIVE_UPDATES_S3_BUCKET }}/bundles/${{ steps.pkg.outputs.bundle }}" \
-            --cache-control "public, max-age=31536000, immutable"
+            "s3://${{ secrets.R2_BUCKET }}/bundles/${{ steps.pkg.outputs.bundle }}" \
+            --endpoint-url "${{ secrets.R2_ENDPOINT_URL }}" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/zip" \
+            --checksum-algorithm CRC32
+
+      - name: Resolve bundle public URL
+        id: url
+        run: |
+          BUNDLE_URL="${{ secrets.R2_PUBLIC_BASE }}/bundles/${{ steps.pkg.outputs.bundle }}"
+          echo "bundle_url=$BUNDLE_URL" >> $GITHUB_OUTPUT
+          echo "Bundle uploaded — $BUNDLE_URL"
 
       - name: Bump API manifest env vars
+        if: env.API_DEPLOY_HOOK_URL != ''
         env:
           PAYLOAD: |
             {
               "channel": "${{ inputs.channel || 'beta' }}",
               "version": "${{ steps.meta.outputs.version }}",
               "buildId": "${{ steps.meta.outputs.build_id }}",
-              "url": "${{ secrets.LIVE_UPDATES_CDN_BASE }}/${{ steps.pkg.outputs.bundle }}",
+              "url": "${{ steps.url.outputs.bundle_url }}",
               "checksum": "${{ steps.pkg.outputs.checksum }}",
               "size": ${{ steps.pkg.outputs.size }},
               "rolloutPct": ${{ inputs.rollout_pct || '10' }}
@@ -139,7 +158,27 @@ jobs:
             -d "$PAYLOAD" \
             "${{ secrets.API_DEPLOY_HOOK_URL }}"
 
+      - name: Emit env vars (manual fallback when API hook ไม่ตั้ง)
+        if: env.API_DEPLOY_HOOK_URL == ''
+        run: |
+          {
+            echo "## OTA Manifest env vars (ต้อง paste ลง API host)"
+            echo ""
+            echo '```bash'
+            echo "LIVE_UPDATES_VERSION=${{ steps.meta.outputs.version }}"
+            echo "LIVE_UPDATES_BUILD_ID=${{ steps.meta.outputs.build_id }}"
+            echo "LIVE_UPDATES_BUNDLE_URL=${{ steps.url.outputs.bundle_url }}"
+            echo "LIVE_UPDATES_CHECKSUM=${{ steps.pkg.outputs.checksum }}"
+            echo "LIVE_UPDATES_BUNDLE_SIZE_BYTES=${{ steps.pkg.outputs.size }}"
+            echo "LIVE_UPDATES_ROLLOUT_PCT=${{ inputs.rollout_pct || '10' }}"
+            echo "LIVE_UPDATES_PAUSE=0"
+            echo '```'
+            echo ""
+            echo "Channel: \`${{ inputs.channel || 'beta' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Smoke test manifest
+        if: env.API_URL != ''
         run: |
           curl -fsSL "${{ secrets.API_URL }}/v1/app/live-updates/manifest?platform=ios&nativeVersion=1.0.0&channel=${{ inputs.channel || 'beta' }}" \
             | tee manifest.json

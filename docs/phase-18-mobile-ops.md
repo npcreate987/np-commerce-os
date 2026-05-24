@@ -150,7 +150,7 @@ public void onCreate() {
 
 | ปัจจัย               | Ionic Appflow            | Self-hosted (เลือก)        |
 | -------------------- | ------------------------ | ------------------------- |
-| ราคา                 | $499/mo (Pro)            | ~$10/mo (S3 + CloudFront) |
+| ราคา                 | $499/mo (Pro)            | **ฟรี** (Cloudflare R2 free tier — 10 GB storage, ไม่มี egress fee) |
 | Lock-in              | สูง — ต้อง migration เมื่อย้าย | ไม่มี                    |
 | Privacy              | ต้องส่ง bundle ผ่าน server เขา | bundle อยู่ใน CDN เราเอง  |
 | Apple review safety  | OK (review URL อิสระ)    | OK                        |
@@ -173,8 +173,8 @@ Capgo plugin จัด:
 2) GH Action `mobile-live-update.yml`:
    - Build static export
    - sha256 + zip bundle
-   - Upload S3 (immutable URL)
-   - Webhook → API host bump env vars
+   - Upload Cloudflare R2 (S3-compat API, immutable URL)
+   - Webhook → API host bump env vars (optional — manual summary fallback)
    - Sentry release create
    ↓
 3) User เปิดแอป
@@ -195,7 +195,7 @@ Capgo plugin จัด:
 | ---------------------------------- | ----------------------------------------------------- | ------------------- |
 | `LIVE_UPDATES_VERSION`             | semver display name                                   | `1.0.5`             |
 | `LIVE_UPDATES_BUILD_ID`            | git short SHA (unique per build)                      | `1.0.5-abc123def0`  |
-| `LIVE_UPDATES_BUNDLE_URL`          | HTTPS URL ของ zip                                     | https://cdn.np.app/bundles/web-bundle-1.0.5-abc123def0.zip |
+| `LIVE_UPDATES_BUNDLE_URL`          | HTTPS URL ของ zip (R2 public dev URL)                  | https://pub-abc123.r2.dev/bundles/web-bundle-1.0.5-abc123def0.zip |
 | `LIVE_UPDATES_CHECKSUM`            | sha256 hex                                            | `5e8a...`           |
 | `LIVE_UPDATES_BUNDLE_SIZE_BYTES`   | size for "ดาวน์โหลด X MB" UI                          | `3214567`           |
 | `LIVE_UPDATES_MIN_NATIVE_VERSION`  | shell ต่ำสุดที่ใช้ bundle นี้ได้                      | `1.0.0`             |
@@ -242,7 +242,7 @@ Apple อนุญาต hot update **เฉพาะ** เมื่อ:
 | --------------------- | ---------------------------------- | ------------------------------------- |
 | `mobile-ios`          | tag `mobile-v*` หรือ manual       | TestFlight build                      |
 | `mobile-android`      | tag `mobile-v*` หรือ manual       | Play Internal Testing AAB             |
-| `mobile-live-update`  | tag `live-v*` หรือ manual          | OTA bundle ลง S3 + manifest bump      |
+| `mobile-live-update`  | tag `live-v*` หรือ manual          | OTA bundle ลง R2 + manifest bump      |
 
 ตัวอย่างการใช้:
 
@@ -354,7 +354,7 @@ KPI ที่ใช้ได้:
 - [ ] สร้าง Match repo (private GitHub) + first cert
 - [ ] Service account JSON (Play) + Release Manager role
 - [ ] Sentry org + 3 projects (web, ios, android) + DSN
-- [ ] S3 bucket + CloudFront distribution + IAM user
+- [ ] Cloudflare R2 bucket `np-commerce-live-updates` + Public Dev URL + API token (Object R/W)
 - [ ] API host เปิด env vars + webhook endpoint
 - [ ] ตั้ง GitHub Environments + reviewers
 - [ ] First manual upload (Play ต้องมี draft แรกก่อน CI)
@@ -401,7 +401,7 @@ BUILD_STATIC=true pnpm --filter web build
 cd apps/web/out && zip -r ../../../test-bundle.zip . && cd -
 sha256sum test-bundle.zip
 # → ใช้ค่า hash อัปเดต env LIVE_UPDATES_CHECKSUM, BUNDLE_URL ใน API
-curl -s "https://api.np.app/v1/app/live-updates/manifest?platform=ios&nativeVersion=1.0.0&channel=beta" | jq
+curl -s "${API_URL:-http://localhost:3001}/v1/app/live-updates/manifest?platform=ios&nativeVersion=1.0.0&channel=beta" | jq
 
 # 3) Sentry smoke
 curl -X POST "https://sentry.io/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT_NATIVE_IOS}/releases/" \

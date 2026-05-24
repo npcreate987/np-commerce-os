@@ -51,18 +51,36 @@
 | `SENTRY_PROJECT_WEB`              | project slug ของ web                  | สร้างไว้ตั้งแต่ Phase 13.1                       |
 | `NEXT_PUBLIC_SENTRY_DSN`          | DSN public (มี protocol-keyed value)  | sentry.io → Projects → Client Keys (DSN)         |
 
-## 5) Live Updates (OTA)
+## 5) Live Updates (OTA) — Cloudflare R2
 
-| Secret                            | คำอธิบาย                                                            |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `AWS_ACCESS_KEY_ID`               | IAM user ที่มี `s3:PutObject` บน bucket OTA                          |
-| `AWS_SECRET_ACCESS_KEY`           | -                                                                   |
-| `AWS_REGION`                      | `ap-southeast-1`                                                    |
-| `LIVE_UPDATES_S3_BUCKET`          | เช่น `np-app-live-updates`                                          |
-| `LIVE_UPDATES_CDN_BASE`           | CloudFront URL `https://cdn.np.app/bundles`                         |
-| `API_DEPLOY_HOOK_URL`             | webhook ของ API server (Vercel/Railway) สำหรับ bump env vars        |
-| `API_DEPLOY_HOOK_SECRET`          | HMAC secret 32 chars                                                |
-| `API_URL`                         | เช่น `https://api.np.app` (สำหรับ smoke test manifest)              |
+> เปลี่ยนจาก AWS S3 + CloudFront → **Cloudflare R2** (Phase 18 revision 2026-05-24)
+> เหตุผล: ฟรี egress, ฟรี 10 GB storage, ไม่ต้องสมัคร AWS, ใช้ S3-compatible API
+> (AWS CLI ใช้ได้ตรงๆ ผ่าน `--endpoint-url`)
+
+| Secret                          | คำอธิบาย                                                                       | ที่มา                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `R2_ACCESS_KEY_ID`              | R2 API token — Object Read & Write (scope = bucket เดียว)                      | dash.cloudflare.com → R2 → Manage R2 API Tokens → Create               |
+| `R2_SECRET_ACCESS_KEY`          | secret access key (แสดงครั้งเดียวตอน create token)                              | หน้าเดียวกัน                                                            |
+| `R2_ENDPOINT_URL`               | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`                                | Account ID อยู่ใน dash URL หรือบน home page sidebar                     |
+| `R2_BUCKET`                     | `np-commerce-live-updates`                                                     | สร้างที่ dash → R2 Object Storage → Create bucket (เลือก APAC)         |
+| `R2_PUBLIC_BASE`                | `https://pub-<RANDOM>.r2.dev` (สำหรับ public download โดย client)              | bucket → Settings → Public Development URL → Allow Access              |
+| `API_DEPLOY_HOOK_URL`           | (optional) webhook URL บน API host สำหรับ bump env vars                        | จะใช้ตอน API deployed (Phase 19+) — ถ้าไม่ตั้ง workflow จะ emit ลง summary |
+| `API_DEPLOY_HOOK_SECRET`        | (optional) HMAC secret 32 chars สำหรับ verify webhook signature                | สร้างเอง — `openssl rand -hex 32`                                       |
+| `API_URL`                       | (optional) เช่น `https://api.example.com` สำหรับ smoke test manifest          | ตั้งเมื่อ API deployed                                                 |
+
+### Pre-flight: ทดสอบ R2 credentials ก่อน paste
+
+```bash
+# ใน terminal ของคุณ
+source ~/keystores/np-commerce-vault.env
+AWS_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID \
+AWS_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY \
+AWS_DEFAULT_REGION=auto \
+aws s3 ls --endpoint-url "$R2_ENDPOINT" s3://$R2_BUCKET/
+
+# ✅ คาดหวัง: empty output (bucket ใหม่ ยังไม่มี object) — ไม่ error = pass
+# ❌ ถ้าได้ "InvalidAccessKeyId" → token ผิด, ดู R2 → Manage R2 API Tokens
+```
 
 ## 6) Other
 
@@ -109,5 +127,6 @@
 - [ ] First AAB upload ผ่าน manual แล้ว (Play Console ต้อง draft ครั้งแรก)
 - [ ] Service account ถูก link จาก Play Console → Users → Add new user (`Release Manager`)
 - [ ] Sentry projects 2 ตัว (ios + android) + DSN copy ลง `NEXT_PUBLIC_SENTRY_DSN`
-- [ ] S3 bucket + CloudFront distribution พร้อม (OTA bundle URL คงที่)
-- [ ] API host รับ webhook bump env vars แล้ว (เขียนเอง หรือใช้ Vercel envs API)
+- [ ] **Cloudflare R2 bucket** `np-commerce-live-updates` พร้อม (Public Development URL = on)
+- [ ] R2 API token scoped กับ bucket นั้น + smoke `aws s3 ls --endpoint-url ...` ผ่าน
+- [ ] (optional) API host รับ webhook bump env vars แล้ว — ถ้ายังไม่มี ใช้ manual summary ใน Actions UI
