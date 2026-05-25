@@ -54,6 +54,13 @@
 			"group": "NPCommercePrefs"
 		},
 		"Camera": {},
-		"Geolocation": {}
+		"Geolocation": {},
+		"CapacitorUpdater": {
+			"autoUpdate": false,
+			"autoDeleteFailed": true,
+			"autoDeletePrevious": true,
+			"resetWhenUpdate": false,
+			"directUpdate": false
+		}
 	}
 }
