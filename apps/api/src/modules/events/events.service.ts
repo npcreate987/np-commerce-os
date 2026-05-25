@@ -324,19 +324,21 @@ export class EventsService {
 
   async purgeOlderThan(days: number): Promise<{ purged: number }> {
     const safeDays = Math.max(7, Math.floor(days));
+    // safeDays is validated to be a positive integer above, so embedding it
+    // directly into the INTERVAL literal is safe (no SQL-injection vector).
+    // Ported from SQLite `datetime('now', '-N days')` to Postgres
+    // `NOW() - INTERVAL 'N days'` so the retention sweep stops failing with
+    // "syntax error at or near ')'" on the Railway Postgres add-on.
     const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT COUNT(*) AS c FROM user_events WHERE ts < datetime('now', ?)`,
-      `-${safeDays} days`,
+      `SELECT COUNT(*) AS c FROM user_events WHERE ts < NOW() - INTERVAL '${safeDays} days'`,
     )) as Array<{ c: number }>;
     const purged = Number(rows[0]?.c ?? 0);
     if (purged > 0) {
       await this.prisma.$executeRawUnsafe(
-        `DELETE FROM user_events WHERE ts < datetime('now', ?)`,
-        `-${safeDays} days`,
+        `DELETE FROM user_events WHERE ts < NOW() - INTERVAL '${safeDays} days'`,
       );
       await this.prisma.$executeRawUnsafe(
-        `DELETE FROM user_sessions WHERE lastSeenAt < datetime('now', ?)`,
-        `-${safeDays} days`,
+        `DELETE FROM user_sessions WHERE "lastSeenAt" < NOW() - INTERVAL '${safeDays} days'`,
       );
     }
     return { purged };

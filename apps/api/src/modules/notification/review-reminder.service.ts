@@ -68,15 +68,15 @@ export class ReviewReminderService
       // Pull DELIVERED orders inside the 72h-168h window that don't yet
       // have a notification_logs entry for our dedupe key.
       const rows = (await this.prisma.$queryRawUnsafe(
-        `SELECT o.id AS orderId, o.customerId, o.shopId,
-                o.totalCents, o.updatedAt
+        `SELECT o.id AS "orderId", o."customerId", o."shopId",
+                o."totalCents", o."updatedAt"
          FROM orders o
          WHERE o.status = 'DELIVERED'
-           AND o.updatedAt <= datetime('now', '-72 hours')
-           AND o.updatedAt >  datetime('now', '-168 hours')
+           AND o."updatedAt" <= NOW() - INTERVAL '72 hours'
+           AND o."updatedAt" >  NOW() - INTERVAL '168 hours'
            AND NOT EXISTS (
              SELECT 1 FROM notification_logs nl
-             WHERE nl.providerMessageId = 'rr:' || o.id
+             WHERE nl."providerMessageId" = 'rr:' || o.id
            )
          LIMIT 200`,
       )) as Array<{

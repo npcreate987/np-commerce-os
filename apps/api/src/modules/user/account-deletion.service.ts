@@ -49,12 +49,24 @@ export class AccountDeletionService implements OnApplicationBootstrap {
       this.logger.log('sweep disabled via env');
       return;
     }
-    // Stagger first run 90s after boot to let other modules settle
-    setTimeout(() => void this.purgeExpiredAccounts(), 90_000);
-    this.timer = setInterval(
-      () => void this.purgeExpiredAccounts(),
-      SWEEP_INTERVAL_MS,
-    );
+    // Stagger first run 90s after boot to let other modules settle.
+    // .catch is defence-in-depth: purgeExpiredAccounts already wraps its
+    // body in try/catch, but we never want a stray rejection from this
+    // setInterval/setTimeout callback to crash the Node process.
+    setTimeout(() => {
+      this.purgeExpiredAccounts().catch((err) =>
+        this.logger.warn(
+          `[deletion] sweep failed: ${(err as Error)?.message ?? err}`,
+        ),
+      );
+    }, 90_000);
+    this.timer = setInterval(() => {
+      this.purgeExpiredAccounts().catch((err) =>
+        this.logger.warn(
+          `[deletion] sweep failed: ${(err as Error)?.message ?? err}`,
+        ),
+      );
+    }, SWEEP_INTERVAL_MS);
   }
 
   /**
@@ -153,27 +165,36 @@ export class AccountDeletionService implements OnApplicationBootstrap {
    * tooling / tests can trigger it on demand.
    */
   async purgeExpiredAccounts(): Promise<{ purgedCount: number }> {
-    const due = await this.prisma.user.findMany({
-      where: {
-        deletionPurgeAt: { lte: new Date() },
-      },
-      select: { id: true, email: true },
-    });
-
     let purgedCount = 0;
-    for (const u of due) {
-      try {
-        await this.hardDelete(u.id);
-        purgedCount += 1;
-      } catch (err) {
-        this.logger.error(
-          `[deletion] hard-delete failed user=${u.id}: ${(err as Error).message}`,
-        );
-      }
-    }
+    try {
+      const due = await this.prisma.user.findMany({
+        where: {
+          deletionPurgeAt: { lte: new Date() },
+        },
+        select: { id: true, email: true },
+      });
 
-    if (purgedCount > 0) {
-      this.logger.log(`[deletion] purged ${purgedCount} expired accounts`);
+      for (const u of due) {
+        try {
+          await this.hardDelete(u.id);
+          purgedCount += 1;
+        } catch (err) {
+          this.logger.error(
+            `[deletion] hard-delete failed user=${u.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+
+      if (purgedCount > 0) {
+        this.logger.log(`[deletion] purged ${purgedCount} expired accounts`);
+      }
+    } catch (err) {
+      // Catch-all so a transient DB error (e.g. P2021 missing-table on a
+      // fresh deploy before migrations land) never escapes the cron tick
+      // and crashes the process via Node's unhandledRejection -> exit.
+      this.logger.warn(
+        `[deletion] purge tick failed: ${(err as Error)?.message ?? err}`,
+      );
     }
     return { purgedCount };
   }

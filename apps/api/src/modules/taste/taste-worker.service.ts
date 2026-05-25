@@ -53,45 +53,55 @@ export class TasteWorkerService implements OnApplicationBootstrap {
   }
 
   private async tick(): Promise<void> {
-    if (this.running) return; // skip overlapping ticks
-    const batch = this.taste.takeBatch(MAX_PER_TICK);
-    if (batch.length === 0) return;
-
-    this.running = true;
-    const started = Date.now();
-    let ok = 0;
-    let failed = 0;
-
+    // Outer try/catch so a transient DB error (e.g. P2021 missing-table on a
+    // fresh deploy before migrations land) never escapes the cron tick and
+    // crashes the process via Node's unhandledRejection -> exit.
     try {
-      // Simple bounded-concurrency runner — no extra deps.
-      let cursor = 0;
-      const next = async (): Promise<void> => {
-        while (cursor < batch.length) {
-          const i = cursor++;
-          const userId = batch[i];
-          if (!userId) continue;
-          try {
-            await this.taste.rebuildFor(userId);
-            ok++;
-          } catch (e) {
-            failed++;
-            this.logger.warn(
-              `rebuild failed for ${userId}: ${(e as Error).message}`,
-            );
+      if (this.running) return; // skip overlapping ticks
+      const batch = this.taste.takeBatch(MAX_PER_TICK);
+      if (batch.length === 0) return;
+
+      this.running = true;
+      const started = Date.now();
+      let ok = 0;
+      let failed = 0;
+
+      try {
+        // Simple bounded-concurrency runner — no extra deps.
+        let cursor = 0;
+        const next = async (): Promise<void> => {
+          while (cursor < batch.length) {
+            const i = cursor++;
+            const userId = batch[i];
+            if (!userId) continue;
+            try {
+              await this.taste.rebuildFor(userId);
+              ok++;
+            } catch (e) {
+              failed++;
+              this.logger.warn(
+                `rebuild failed for ${userId}: ${(e as Error).message}`,
+              );
+            }
           }
-        }
-      };
-      await Promise.all(
-        Array.from({ length: CONCURRENCY }, () => next()),
-      );
-    } finally {
-      this.running = false;
-      const ms = Date.now() - started;
-      if (ok > 0 || failed > 0) {
-        this.logger.log(
-          `taste rebuild: ok=${ok} fail=${failed} in ${ms}ms (queue=${this.taste.queueSize()})`,
+        };
+        await Promise.all(
+          Array.from({ length: CONCURRENCY }, () => next()),
         );
+      } finally {
+        this.running = false;
+        const ms = Date.now() - started;
+        if (ok > 0 || failed > 0) {
+          this.logger.log(
+            `taste rebuild: ok=${ok} fail=${failed} in ${ms}ms (queue=${this.taste.queueSize()})`,
+          );
+        }
       }
+    } catch (err) {
+      this.running = false;
+      this.logger.warn(
+        `taste-worker tick failed: ${(err as Error)?.message ?? err}`,
+      );
     }
   }
 }
