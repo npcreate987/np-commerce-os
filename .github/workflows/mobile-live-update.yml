@@ -89,9 +89,17 @@ jobs:
       - name: Resolve build id
         id: meta
         run: |
+          # Phase 19.2 — buildId ต้อง unique ต่อ workflow run เพราะ Next.js
+          # build ไม่ deterministic 100% (size + checksum ต่างกัน 5-20 bytes
+          # ระหว่าง runs ของ commit เดียวกัน). ถ้า bundle URL ใช้แค่ git SHA
+          # workflow run ที่ 2 จะ overwrite R2 file แต่ manifest entry ของ
+          # workflow run แรกยังเก็บ checksum เก่า → client download แล้ว
+          # checksum mismatch → OTA fail.
+          # GITHUB_RUN_NUMBER เป็น integer monotonic ของ workflow นี้
+          # โดยเฉพาะ ทำให้ทุก run สร้าง unique buildId + bundle path
           SHORT_SHA=$(git rev-parse --short=10 HEAD)
           VERSION=$(node -p "require('./apps/web/package.json').version || '1.0.0'")
-          BUILD_ID="${VERSION}-${SHORT_SHA}"
+          BUILD_ID="${VERSION}-${SHORT_SHA}-${GITHUB_RUN_NUMBER}"
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT

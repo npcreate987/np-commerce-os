@@ -241,7 +241,14 @@ async function bootstrap(): Promise<void> {
     },
   );
 
-  app.setGlobalPrefix('v1');
+  // Phase 19.2 — Global prefix ถูกถอดออกชั่วคราว เพราะ:
+  //   1. Railway healthcheckPath ใช้ `/health` (ตั้งใน railway.json) — ถ้า
+  //      setGlobalPrefix('v1') ทำงาน healthcheck จะ 404 ทันที
+  //   2. GitHub Actions OTA workflow POST ไปที่ `/app/live-updates/webhook`
+  //      (ไม่มี /v1) — ถ้าเปิด prefix ต้องอัปเดต workflow ด้วย
+  //   3. Web client (apps/web/src/lib/env.ts) ตั้ง apiPrefix=''
+  // ถ้าจะเปิดอีกที ต้องเปลี่ยน 3 จุดพร้อมกัน + ใช้ exclude สำหรับ /health
+  //   app.setGlobalPrefix('v1', { exclude: [{ path: 'health', method: RequestMethod.GET }] });
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Phase 13.3a — Global throttler. The guard is a *no-op* on routes that

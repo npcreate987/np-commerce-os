@@ -47,5 +47,11 @@ function resolveApiUrl(): string {
 
 export const env = {
   apiUrl: resolveApiUrl(),
-  apiPrefix: '/v1',
+  // Phase 19.2 — API runtime ปัจจุบัน serve ที่ root (ไม่มี /v1 prefix)
+  // เพื่อให้ตรงกับ /health (Railway healthcheck) และ /app/live-updates/webhook
+  // (GitHub Actions). ถ้าจะเปิด /v1 prefix ใน main.ts ต้อง:
+  //   1. setGlobalPrefix('v1', { exclude: [{ path: 'health', method: GET }] })
+  //   2. อัปเดต GitHub Actions URL → /v1/app/live-updates/webhook
+  //   3. เปลี่ยน apiPrefix กลับเป็น '/v1'
+  apiPrefix: '',
 };

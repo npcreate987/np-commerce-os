@@ -41,7 +41,10 @@ const config: CapacitorConfig = {
     backgroundColor: '#ffffff',
     allowMixedContent: !isProd,
     captureInput: true,
-    webContentsDebuggingEnabled: !isProd,
+    // Phase 19.2 dry-run — เปิด chrome://inspect/#devices ชั่วคราวเพื่อดู
+    // console.log + Network จาก WebView ใน release APK. หลัง verify OTA loop
+    // เสร็จแล้ว เปลี่ยนกลับเป็น `!isProd` เพื่อปิด debug surface ใน prod
+    webContentsDebuggingEnabled: true,
   },
   server: isDev
     ? {
@@ -85,6 +88,17 @@ const config: CapacitorConfig = {
     },
     Camera: {},
     Geolocation: {},
+    // Phase 19.2 — Capgo plugin ใช้เฉพาะเป็น download/swap runtime
+    // เราเขียน manifest fetch + bundle URL resolution เอง (apps/web/src/lib/live-updates.ts)
+    // แล้วเรียก CapacitorUpdater.download() ตรง ๆ — ไม่ใช้ Capgo Cloud (api.capgo.app)
+    // ปิด autoUpdate กัน plugin ping Capgo Cloud → 429 "on_premise_app"
+    CapacitorUpdater: {
+      autoUpdate: false,
+      autoDeleteFailed: true,
+      autoDeletePrevious: true,
+      resetWhenUpdate: false,
+      directUpdate: false,
+    },
   },
 };
 

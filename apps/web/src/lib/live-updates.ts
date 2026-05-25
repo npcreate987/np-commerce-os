@@ -75,14 +75,22 @@ async function loadPlugin(): Promise<UpdaterModule | null> {
 }
 
 export async function getCurrentChannel(): Promise<'production' | 'beta'> {
+  // First boot → fall back to NEXT_PUBLIC_LIVE_UPDATES_DEFAULT_CHANNEL (build-time)
+  // ช่วยให้ dry-run / pre-release ship APK ที่ default ไป beta ได้ ส่วน prod GA
+  // จะตั้งใน .env.production = 'production'. หลังจาก first launch localStorage
+  // จะ override env เสมอ
+  const envDefault =
+    process.env.NEXT_PUBLIC_LIVE_UPDATES_DEFAULT_CHANNEL === 'beta' ? 'beta' : 'production';
   try {
     const v =
       typeof window !== 'undefined'
         ? window.localStorage.getItem(STORAGE_KEY_CHANNEL)
         : null;
-    return v === 'beta' ? 'beta' : 'production';
+    if (v === 'beta') return 'beta';
+    if (v === 'production') return 'production';
+    return envDefault;
   } catch {
-    return 'production';
+    return envDefault;
   }
 }
 
