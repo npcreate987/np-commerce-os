@@ -189,14 +189,41 @@ jobs:
             echo "Channel: \`${{ inputs.channel || 'beta' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Smoke test manifest
-        if: env.API_URL != ''
+      - name: Smoke test manifest (verify webhook actually persisted)
+        # Phase 19.4 — verify the new bundle is actually live on the manifest
+        # endpoint AFTER the webhook returned 200. This catches:
+        #   - In-memory cache wiped by a Railway redeploy mid-flight (was a
+        #     real failure mode before Postgres persistence landed in 19.3)
+        #   - Webhook returning fake-positive 200 without persisting
+        #   - URL prefix mismatch (we had /v1 vs no-/v1 confusion in early prod)
+        #
+        # Derives the API base from API_DEPLOY_HOOK_URL when API_URL isn't
+        # set, by stripping the `/app/live-updates/webhook` suffix. Skips
+        # entirely if neither is configured.
+        #
+        # NOT continue-on-error: if the manifest disagrees with what we just
+        # POSTed, the user must know NOW so they can re-run before mobile
+        # clients start polling for the broken state.
+        if: env.API_DEPLOY_HOOK_URL != '' || env.API_URL != ''
         run: |
-          curl -fsSL "${{ secrets.API_URL }}/v1/app/live-updates/manifest?platform=ios&nativeVersion=1.0.0&channel=${{ inputs.channel || 'beta' }}" \
+          if [ -n "${{ secrets.API_URL }}" ]; then
+            BASE="${{ secrets.API_URL }}"
+          else
+            # Strip the /app/live-updates/webhook tail (or any trailing
+            # path) — only the protocol+host portion is needed for the
+            # manifest GET below.
+            BASE=$(echo "${{ secrets.API_DEPLOY_HOOK_URL }}" | sed -E 's|/app/.*$||; s|/v1/app/.*$||')
+          fi
+          echo "Base API URL: $BASE"
+          curl -fsSL "$BASE/app/live-updates/manifest?platform=ios&nativeVersion=1.0.0&channel=${{ inputs.channel || 'beta' }}" \
             | tee manifest.json
           BUILD_ID=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).buildId")
-          test "$BUILD_ID" = "${{ steps.meta.outputs.build_id }}" \
-            || (echo "buildId mismatch — manifest=${BUILD_ID} expected=${{ steps.meta.outputs.build_id }}"; exit 1)
+          if [ "$BUILD_ID" != "${{ steps.meta.outputs.build_id }}" ]; then
+            echo "::error::manifest buildId=${BUILD_ID} but expected=${{ steps.meta.outputs.build_id }}"
+            echo "::error::Webhook returned 200 but the manifest endpoint disagrees — DB persistence may have failed silently"
+            exit 1
+          fi
+          echo "✅ Manifest endpoint reflects the just-pushed buildId."
 
       - name: Notify Sentry of release
         # Non-blocking — Sentry release tagging is nice-to-have (helps tie
