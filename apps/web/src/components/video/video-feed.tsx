@@ -454,11 +454,19 @@ export function VideoFeed({
                         the rail occupies ~330 px instead of ~420 px on a
                         720-px-tall video, leaving more clip visible
                       • 10-px labels (was 11 px) with gap-0.5 hugging the
-                        button to keep each "row" visually tight                  */}
+                        button to keep each "row" visually tight
+
+                    Phase 20.4 — rail bottom anchors 4 px above the 56-px
+                    black bottom nav (was 104 px above the screen edge,
+                    which left a 48-px floating gap once the bar was
+                    shrunk). The new offset = nav-height (3.5rem) + tiny
+                    breathing room (0.25rem) + safe-area inset. The music
+                    disc now sits flush against the top of the bar,
+                    matching the TikTok reference.                            */}
                 <div
                   className="absolute right-2 z-20 flex flex-col items-center gap-2.5"
                   style={{
-                    bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)',
+                    bottom: 'calc(env(safe-area-inset-bottom) + 3.75rem)',
                   }}
                 >
                   {/* Creator avatar with + follow */}
@@ -597,11 +605,15 @@ export function VideoFeed({
                   </div>
                 </div>
 
-                {/* === Bottom caption + product CTA ======================== */}
+                {/* === Bottom caption + product CTA ========================
+                    Phase 20.4 — paddingBottom now clears the 56-px black
+                    bottom nav (3.5rem) + a 0.75-rem buffer so the product
+                    CTA pill — the last item in the stack — sits cleanly
+                    above the bar instead of being half-clipped by it.    */}
                 <div
                   className="absolute inset-x-0 bottom-0 z-10 px-4 pb-5 pr-20"
                   style={{
-                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)',
+                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 4.25rem)',
                   }}
                 >
                   <div className="space-y-2">
