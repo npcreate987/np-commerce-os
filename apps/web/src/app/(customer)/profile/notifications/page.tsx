@@ -267,7 +267,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
           การแจ้งเตือน
         </h1>
         <p className="mt-1 text-xs text-ink-500">
-          เลือกช่องทางที่ต้องการให้ NP Commerce ส่งข่าวสารและอัปเดตคำสั่งซื้อ
+          เลือกช่องทางที่ต้องการให้ TuKTuK ส่งข่าวสารและอัปเดตคำสั่งซื้อ
         </p>
       </header>
 
@@ -281,7 +281,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
             {nativePerm === 'granted'
               ? 'การแจ้งเตือนเปิดอยู่ — ระบบจะส่ง push เมื่อมีออเดอร์ใหม่หรือโปรพิเศษ'
               : nativePerm === 'denied'
-                ? 'ถูกบล็อก — เปิด "การตั้งค่า → แจ้งเตือน → NP Commerce" จากระบบมือถือ'
+                ? 'ถูกบล็อก — เปิด "การตั้งค่า → แจ้งเตือน → TuKTuK" จากระบบมือถือ'
                 : 'เปิดเพื่อรับ push สำคัญ เช่น สถานะออเดอร์ จัดส่ง โปรลด'}
           </p>
           <div className="mt-3">

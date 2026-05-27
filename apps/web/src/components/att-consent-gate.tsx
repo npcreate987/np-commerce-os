@@ -122,7 +122,7 @@ export function AttConsentGate(): JSX.Element | null {
           ช่วยเราเรียนรู้ความชอบของคุณ
         </h2>
         <p className="mt-2 text-sm text-surface-muted">
-          NP Commerce ใช้ข้อมูลการใช้งานของคุณ (เช่น สินค้าที่คุณดู
+          TuKTuK ใช้ข้อมูลการใช้งานของคุณ (เช่น สินค้าที่คุณดู
           ค้นหา ซื้อ) เพื่อแนะนำสินค้าและเนื้อหาที่น่าจะตรงใจ
           ปิดได้ทุกเมื่อในหน้า "ความเป็นส่วนตัว"
         </p>
@@ -133,7 +133,7 @@ export function AttConsentGate(): JSX.Element | null {
           </li>
           <li className="flex gap-1.5">
             <span>•</span>
-            <span>ข้อมูลถูกใช้เฉพาะใน NP Commerce เท่านั้น</span>
+            <span>ข้อมูลถูกใช้เฉพาะใน TuKTuK เท่านั้น</span>
           </li>
           <li className="flex gap-1.5">
             <span>•</span>

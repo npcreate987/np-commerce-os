@@ -17,9 +17,9 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'นโยบายความเป็นส่วนตัว · NP Commerce',
+  title: 'นโยบายความเป็นส่วนตัว · TuKTuK',
   description:
-    'นโยบายความเป็นส่วนตัวของ NP Commerce — ข้อมูลที่เก็บ การใช้งาน การลบ และสิทธิ์ของผู้ใช้',
+    'นโยบายความเป็นส่วนตัวของ TuKTuK — ข้อมูลที่เก็บ การใช้งาน การลบ และสิทธิ์ของผู้ใช้',
 };
 
 export default function PrivacyPolicyPage(): JSX.Element {
@@ -43,7 +43,7 @@ export default function PrivacyPolicyPage(): JSX.Element {
       <section className="space-y-3">
         <h2 className="text-xl font-bold">1. เกี่ยวกับเอกสารฉบับนี้</h2>
         <p className="text-sm leading-relaxed">
-          เอกสารนี้อธิบายว่า NP Commerce (ดำเนินการโดย NP Co., Ltd.)
+          เอกสารนี้อธิบายว่า TuKTuK (ดำเนินการโดย NP Co., Ltd.)
           เก็บข้อมูลอะไร ใช้ทำอะไร แชร์กับใคร และวิธีที่คุณควบคุมข้อมูลของตัวเอง
           เราปฏิบัติตาม{' '}
           <strong>พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA)</strong>{' '}
@@ -174,7 +174,7 @@ export default function PrivacyPolicyPage(): JSX.Element {
       <section className="space-y-3">
         <h2 className="text-xl font-bold">7. เด็กอายุต่ำกว่า 13</h2>
         <p className="text-sm leading-relaxed">
-          NP Commerce ไม่ได้ออกแบบมาสำหรับเด็กอายุต่ำกว่า 13 ปี
+          TuKTuK ไม่ได้ออกแบบมาสำหรับเด็กอายุต่ำกว่า 13 ปี
           ถ้าผู้ปกครองพบว่าเด็กในความดูแลของท่านลงทะเบียนใช้งาน
           กรุณาติดต่อเราที่ <a href="mailto:privacy@np.app" className="text-brand underline">
             privacy@np.app
@@ -186,7 +186,7 @@ export default function PrivacyPolicyPage(): JSX.Element {
       <section className="space-y-3">
         <h2 className="text-xl font-bold">8. การติดตามข้ามแอป (iOS)</h2>
         <p className="text-sm leading-relaxed">
-          NP Commerce ไม่ติดตามคุณข้ามแอปอื่นและไม่แชร์ข้อมูลกับโฆษณา
+          TuKTuK ไม่ติดตามคุณข้ามแอปอื่นและไม่แชร์ข้อมูลกับโฆษณา
           คุณจะเห็นป๊อปอัป "อนุญาตให้ติดตามไหม" ของ Apple ครั้งแรก —
           จะกด "ไม่ให้" ก็ได้ ไม่กระทบฟังก์ชันใด
         </p>
@@ -219,7 +219,7 @@ export default function PrivacyPolicyPage(): JSX.Element {
           ข้อกำหนดการใช้งาน
         </Link>{' '}
         · <Link href="/" className="text-brand hover:underline">
-          กลับ NP Commerce
+          กลับ TuKTuK
         </Link>
       </footer>
     </main>

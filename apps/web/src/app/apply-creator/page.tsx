@@ -231,7 +231,7 @@ export default function ApplyCreatorPage(): JSX.Element {
               สมัครเลย — ฟรี
             </Button>
             <p className="text-center text-[11px] text-ink-500">
-              เมื่อสมัคร = ยอมรับเงื่อนไข Creator ของ NP Commerce OS
+              เมื่อสมัคร = ยอมรับเงื่อนไข Creator ของ TuKTuK
             </p>
           </div>
         </section>

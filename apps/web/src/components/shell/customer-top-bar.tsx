@@ -57,7 +57,7 @@ export function CustomerTopBar(): JSX.Element {
             <SparklesIcon className="relative h-4 w-4" />
           </div>
           <span className="font-display text-sm font-bold tracking-tight text-surface-strong">
-            NP Commerce
+            TuKTuK
           </span>
         </Link>
 

@@ -19,6 +19,8 @@ import {
   PauseIcon,
   PlayIcon,
   PlusIcon,
+  RadioIcon,
+  SearchIcon,
   ShareIcon,
   SparklesIcon,
   VolumeOffIcon,
@@ -135,6 +137,11 @@ export function VideoFeed({
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
   const [savedSet, setSavedSet] = useState<Set<string>>(() => new Set());
+
+  // ------- Top tabs state (visual only for now) ------------------------------
+  // The reel still serves the same feed regardless of the active tab — these
+  // are placeholders for the upcoming Following / Near-me / Live experiences.
+  const [activeTab, setActiveTab] = useState<string>('foryou');
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -347,42 +354,15 @@ export function VideoFeed({
       */}
 
       <div className="relative h-full w-full lg:flex lg:items-stretch lg:justify-center">
-        {/* Top tabs (For You / Following) — overlay on mobile, inline on desktop */}
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center lg:hidden"
-          style={{
-            paddingTop: 'calc(env(safe-area-inset-top) + 14px)',
-          }}
-        >
-          <div className="pointer-events-auto flex items-center gap-5 text-sm font-semibold">
-            <span className="text-white/55">กำลังติดตาม</span>
-            <span className="relative text-white">
-              สำหรับคุณ
-              <span className="absolute -bottom-1 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-white" />
-            </span>
-          </div>
-        </div>
-
-        {/* Top-right controls (mute + search) — overlay on mobile */}
-        <div
-          className="pointer-events-none absolute right-3 top-0 z-30 flex flex-col items-end gap-2 lg:hidden"
-          style={{
-            paddingTop: 'calc(env(safe-area-inset-top) + 14px)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setMuted((m) => !m)}
-            aria-label={muted ? 'เปิดเสียง' : 'ปิดเสียง'}
-            className="pointer-events-auto grid h-9 w-9 place-items-center rounded-full bg-black/40 backdrop-blur"
-          >
-            {muted ? (
-              <VolumeOffIcon className="h-4 w-4" />
-            ) : (
-              <VolumeOnIcon className="h-4 w-4" />
-            )}
-          </button>
-        </div>
+        {/* Top tabs — TikTok-style: LIVE icon left, scroll-snap text tabs
+            centred (with active underline), search icon right. Mobile only;
+            desktop uses the shared CustomerTopBar. */}
+        <FeedTopBar
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          muted={muted}
+          onToggleMute={() => setMuted((m) => !m)}
+        />
 
         {/* === Reel container (mobile = full bleed, desktop = phone frame) === */}
         <div
@@ -730,6 +710,118 @@ export function VideoFeed({
 // ============================================================================
 // Sub-components
 // ============================================================================
+
+/**
+ * TikTok-style top bar for the immersive reel (mobile only).
+ *
+ * Layout
+ * ------
+ *   ┌─────────────────────────────────────────────────────────────────┐
+ *   │ [LIVE]  ชุมชน  ขอนแก่น  เพื่อน  กำลังติดตาม  สำหรับคุณ ▔   [🔍] │
+ *   └─────────────────────────────────────────────────────────────────┘
+ *
+ * - LIVE pill on the far left links to (future) `/feed?tab=live`.
+ * - Centre is a horizontally scrollable strip with snap; the active tab is
+ *   highlighted bold white with a small underline indicator. Inactive tabs
+ *   render at 55 % opacity.
+ * - Search icon on the far right opens `/search`.
+ * - Mute toggle is folded into the right cluster (small, secondary).
+ */
+function FeedTopBar({
+  activeTab,
+  onChangeTab,
+  muted,
+  onToggleMute,
+}: {
+  activeTab: string;
+  onChangeTab: (id: string) => void;
+  muted: boolean;
+  onToggleMute: () => void;
+}): JSX.Element {
+  const tabs: Array<{ id: string; label: string }> = [
+    { id: 'community', label: 'ชุมชน' },
+    { id: 'nearby', label: 'ใกล้ฉัน' },
+    { id: 'friends', label: 'เพื่อน' },
+    { id: 'following', label: 'กำลังติดตาม' },
+    { id: 'foryou', label: 'สำหรับคุณ' },
+  ];
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 z-30 lg:hidden"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}
+    >
+      <div className="pointer-events-auto flex items-center gap-2 pl-3 pr-2">
+        {/* LIVE pill — left */}
+        <Link
+          href="/feed?tab=live"
+          aria-label="ดูถ่ายทอดสด"
+          prefetch={false}
+          className="flex shrink-0 items-center gap-1 text-[12px] font-bold tracking-wide text-white/90 drop-shadow"
+        >
+          <RadioIcon className="h-4 w-4" />
+          <span>LIVE</span>
+        </Link>
+
+        {/* Tabs strip — center, horizontally scrollable on overflow */}
+        <nav
+          role="tablist"
+          aria-label="ฟีดวิดีโอ"
+          className="hide-scrollbar -mx-1 flex flex-1 items-center gap-4 overflow-x-auto px-1 text-[13px] font-semibold"
+          style={{ scrollSnapType: 'x proximity' }}
+        >
+          {tabs.map((t) => {
+            const active = t.id === activeTab;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onChangeTab(t.id)}
+                className={cn(
+                  'relative shrink-0 whitespace-nowrap py-1.5 transition',
+                  active ? 'text-white drop-shadow' : 'text-white/55',
+                )}
+                style={{ scrollSnapAlign: 'center' }}
+              >
+                {t.label}
+                {active ? (
+                  <span
+                    aria-hidden
+                    className="absolute -bottom-0.5 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-white"
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right cluster — mute (secondary) + search */}
+        <button
+          type="button"
+          onClick={onToggleMute}
+          aria-label={muted ? 'เปิดเสียง' : 'ปิดเสียง'}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/85"
+        >
+          {muted ? (
+            <VolumeOffIcon className="h-4 w-4" />
+          ) : (
+            <VolumeOnIcon className="h-4 w-4" />
+          )}
+        </button>
+        <Link
+          href="/search"
+          aria-label="ค้นหา"
+          prefetch={false}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white"
+        >
+          <SearchIcon className="h-5 w-5" />
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function ParsedTags({ tagsJson }: { tagsJson: string }): JSX.Element | null {
   let tags: string[] = [];

@@ -404,7 +404,7 @@ function InviteTab({
             type="button"
             onClick={() => {
               void nativeShare({
-                title: 'NP Commerce',
+                title: 'TuKTuK',
                 text: 'มาช้อปกับฉันสิ!',
                 url: inviteUrl,
               });

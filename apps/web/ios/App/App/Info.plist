@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>NP Commerce</string>
+        <string>TuKTuK</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -52,31 +52,31 @@
 
 	<!-- Camera (composer + future KYC) -->
 	<key>NSCameraUsageDescription</key>
-	<string>NP Commerce ใช้กล้องเพื่อถ่ายคลิปลงฟีดและรูปสินค้า</string>
+	<string>TuKTuK ใช้กล้องเพื่อถ่ายคลิปลงฟีดและรูปสินค้า</string>
 
 	<!-- Photo Library (composer pick + product images) -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>NP Commerce ขอเข้าถึงรูปและคลิปเพื่อใช้โพสต์ลงฟีด</string>
+	<string>TuKTuK ขอเข้าถึงรูปและคลิปเพื่อใช้โพสต์ลงฟีด</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>NP Commerce บันทึกรูปสินค้าที่คุณดาวน์โหลดลงคลังภาพ</string>
+	<string>TuKTuK บันทึกรูปสินค้าที่คุณดาวน์โหลดลงคลังภาพ</string>
 
 	<!-- Microphone (video recording with audio) -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NP Commerce ใช้ไมโครโฟนเพื่อบันทึกเสียงในคลิปวิดีโอที่คุณถ่าย</string>
+	<string>TuKTuK ใช้ไมโครโฟนเพื่อบันทึกเสียงในคลิปวิดีโอที่คุณถ่าย</string>
 
 	<!-- Location (Local Commerce / Rider) -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>NP Commerce ใช้ตำแหน่งของคุณเพื่อค้นหาร้านใกล้คุณและคำนวณค่าจัดส่ง</string>
+	<string>TuKTuK ใช้ตำแหน่งของคุณเพื่อค้นหาร้านใกล้คุณและคำนวณค่าจัดส่ง</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Rider ใช้ตำแหน่งตลอดเวลาเพื่ออัปเดตการจัดส่งให้ลูกค้าและร้านค้า</string>
 
 	<!-- Face ID / Touch ID (future biometric payment confirm) -->
 	<key>NSFaceIDUsageDescription</key>
-	<string>NP Commerce ใช้ Face ID เพื่อยืนยันการชำระเงินอย่างปลอดภัย</string>
+	<string>TuKTuK ใช้ Face ID เพื่อยืนยันการชำระเงินอย่างปลอดภัย</string>
 
 	<!-- App Tracking Transparency (Phase 17 readiness) -->
 	<key>NSUserTrackingUsageDescription</key>
-	<string>NP Commerce ใช้ข้อมูลพฤติกรรมเพื่อแนะนำสินค้าและเนื้อหาที่คุณน่าจะชอบ คุณปิดได้ในหน้า "ความเป็นส่วนตัว"</string>
+	<string>TuKTuK ใช้ข้อมูลพฤติกรรมเพื่อแนะนำสินค้าและเนื้อหาที่คุณน่าจะชอบ คุณปิดได้ในหน้า "ความเป็นส่วนตัว"</string>
 
 	<!-- Custom URL scheme (deep links เช่น OAuth redirect, partner share) -->
 	<key>CFBundleURLTypes</key>

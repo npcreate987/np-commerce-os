@@ -89,7 +89,7 @@ export default function MerchantWalletPage(): JSX.Element {
         <section className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-4">
           <p className="text-xs font-bold text-emerald-900">วิธีคิดเงิน escrow</p>
           <p className="mt-1 text-[11px] text-emerald-900/80">
-            เมื่อลูกค้าชำระเงิน → ระบบจะ &ldquo;พักเงิน&rdquo; ไว้ที่ NP Commerce
+            เมื่อลูกค้าชำระเงิน → ระบบจะ &ldquo;พักเงิน&rdquo; ไว้ที่ TuKTuK
             <br />
             เมื่อลูกค้ากดยืนยันรับสินค้า (หรือผ่าน 7 วันโดยอัตโนมัติ) → เงินจะถูกปล่อยเข้ายอดพร้อมถอน
           </p>

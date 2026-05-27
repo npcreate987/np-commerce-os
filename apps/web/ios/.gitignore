@@ -6,3 +6,9 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/test_output
 fastlane/screenshots
+
+# Bundler — installed gems stay local; Gemfile + Gemfile.lock are committed.
+# (`bundle config set path vendor/bundle` keeps them out of the system gem dir
+#  so we never need root and CI gets a clean reproducible env.)
+.bundle/
+vendor/bundle/

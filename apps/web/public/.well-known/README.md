@@ -1,7 +1,7 @@
 # Deep Link Verification Files (Universal Links / App Links)
 
 ไฟล์ในโฟลเดอร์นี้บอก iOS และ Android ว่าโดเมน `np.app` (และโดเมนถัด ๆ ไป)
-"จับคู่" กับ NP Commerce app — ทำให้ลิงก์ `https://np.app/order/123`
+"จับคู่" กับ TuKTuK app — ทำให้ลิงก์ `https://np.app/order/123`
 เปิดในแอปแทนเว็บ
 
 ## `apple-app-site-association` (iOS — Universal Links)

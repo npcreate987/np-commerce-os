@@ -83,7 +83,7 @@ export default function HomePage(): JSX.Element {
               <span className="absolute inset-0 rounded-2xl bg-noise opacity-30 mix-blend-overlay" aria-hidden />
               <SparklesIcon className="relative h-5 w-5" />
             </div>
-            <span className="font-display text-sm font-bold tracking-tight">NP Commerce</span>
+            <span className="font-display text-sm font-bold tracking-tight">TuKTuK</span>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -229,7 +229,7 @@ export default function HomePage(): JSX.Element {
           </div>
 
           <p className="mt-8 text-center text-[11px] text-surface-faint">
-            © NP Commerce OS · PWA · Installable on iOS / Android
+            © TuKTuK · PWA · Installable on iOS / Android
           </p>
         </section>
       </div>
@@ -246,9 +246,9 @@ export default function HomePage(): JSX.Element {
               <SparklesIcon className="relative h-5 w-5" />
             </div>
             <div>
-              <span className="font-display text-lg font-bold tracking-tight">NP Commerce</span>
+              <span className="font-display text-lg font-bold tracking-tight">TuKTuK</span>
               <p className="-mt-0.5 text-[11px] font-medium text-surface-muted">
-                ระบบ Commerce กลางของไทย
+                ฟีดวิดีโอ + ช้อปปิ้ง + ร้านท้องถิ่น ในแอปเดียว
               </p>
             </div>
           </div>
@@ -476,7 +476,7 @@ export default function HomePage(): JSX.Element {
 
         <footer className="container-app relative mt-24 border-t border-surface pb-12 pt-8">
           <div className="flex items-center justify-between text-[12px] text-surface-faint">
-            <p>© NP Commerce OS · PWA · Installable on iOS / Android</p>
+            <p>© TuKTuK · PWA · Installable on iOS / Android</p>
             <div className="flex items-center gap-5">
               <Link href="/profile/privacy" className="hover:text-surface-strong">
                 Privacy

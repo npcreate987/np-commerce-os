@@ -32,13 +32,13 @@ const anuphan = Anuphan({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'NP Commerce', template: '%s · NP Commerce' },
-  description: 'ระบบ Commerce กลางสำหรับร้านค้าออนไลน์ ร้านท้องถิ่น และ Creator',
+  title: { default: 'TuKTuK', template: '%s · TuKTuK' },
+  description: 'TuKTuK — แอปฟีดวิดีโอ + ร้านค้าออนไลน์ + ร้านท้องถิ่น และ Creator',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'NP Commerce',
+    title: 'TuKTuK',
   },
   formatDetection: { telephone: false },
 };

@@ -1,4 +1,4 @@
-# Mobile App Brand Assets
+# Mobile App Brand Assets — TuKTuK
 
 Source files สำหรับ generate icon + splash ในทุก resolution
 ที่ Capacitor / iOS / Android / PWA ต้องการ
@@ -7,26 +7,30 @@ Source files สำหรับ generate icon + splash ในทุก resolutio
 
 | File | Purpose | Used by |
 |------|---------|---------|
-| `logo.svg` | NP monogram + brand bg (1:1) | base ของ `icon.png` (1024) |
-| `splash.svg` | logo + brand bg เต็มจอ (2732×2732) | base ของ `splash.png` |
-| `icon.png` | rendered จาก `logo.svg` | `@capacitor/assets` input |
+| `icon.png` | TuKTuK artwork ต้นฉบับ (1024×1024) — แก้ไฟล์นี้เพื่อเปลี่ยนไอคอน | source-of-truth สำหรับทุก platform |
+| `icon-only.png` | alias ของ `icon.png` (สร้างอัตโนมัติโดย `assets:render`) | `@capacitor/assets` slot สำหรับ "icon" |
+| `icon-foreground.png` | alias ของ `icon.png` (สร้างอัตโนมัติ) | Android adaptive foreground |
+| `logo.png` | alias ของ `icon.png` (สร้างอัตโนมัติ) | fallback logo สำหรับ `@capacitor/assets` |
+| `logo.svg` | TuKTuK wordmark + neon bg (1:1) | fallback ตอน `icon.png` ไม่มี + บางส่วนของ splash |
+| `splash.svg` | TuKTuK wordmark + neon bg เต็มจอ (2732×2732) | base ของ `splash.png` |
 | `splash.png` | rendered จาก `splash.svg` | `@capacitor/assets` input |
 
-> `*.png` จะถูก auto-generated โดย `pnpm assets:build`
-> (ใช้ `sharp` แปลง SVG → PNG ก่อน feed เข้า `@capacitor/assets`)
+> `*.png` ที่เป็น alias จะถูก auto-generated โดย `pnpm assets:build`
+> ห้ามแก้ไฟล์ alias โดยตรง — แก้ที่ `icon.png` แล้ว rerun pipeline
 
-## วิธีเปลี่ยนเป็นโลโก้จริง
+## วิธีเปลี่ยนไอคอน
 
-ทางที่ 1 — แก้ SVG ตรงนี้:
+วิธีหลัก — ใส่ PNG ใหม่:
+1. เตรียมรูปไอคอน 1024×1024 (RGB, opaque)
+2. แทนที่ `icon.png` ในโฟลเดอร์นี้
+3. รัน `pnpm assets:build` — script จะสร้าง alias (`icon-only.png`, `icon-foreground.png`, `logo.png`) + PWA icons (PNG/WebP) + iOS/Android native sizes ให้อัตโนมัติ
+
+วิธีที่สอง — แก้ SVG (เฉพาะ wordmark):
 1. เปิด `logo.svg` ใน Figma / Illustrator / Inkscape
-2. ทดแทน NP monogram → ของจริง (ขนาดต้องเหลือ safe-zone 80% — 102.4px ขอบแต่ละด้าน)
-3. คงสีพื้นหลัง `#FF3E5C` (brand pink) สำหรับ Android maskable icon ที่ต้องเป็น 1:1 ไม่มี alpha
-4. ทำเหมือนกันกับ `splash.svg`
-
-ทางที่ 2 — ใส่ PNG ตรง:
-1. เตรียม `icon.png` 1024×1024 (RGB, opaque)
-2. เตรียม `splash.png` 2732×2732 (logo อยู่ตรงกลาง ~30% ของจอ)
-3. ลบ `*.svg` ออก (หรือคงไว้ก็ได้ — script จะข้าม render ถ้า PNG ใหม่กว่า)
+2. ทดแทน TuKTuK wordmark → ของจริง (ขนาดต้องเหลือ safe-zone 80% — 102.4px ขอบแต่ละด้าน)
+3. คงพื้นหลังเป็น opaque (ไม่มี alpha) สำหรับ Android maskable icon ที่ต้องเป็น 1:1
+4. ลบ `icon.png` ออก → script จะ render ใหม่จาก SVG
+5. ทำเหมือนกันกับ `splash.svg` สำหรับ splash screen
 
 ## รัน pipeline
 

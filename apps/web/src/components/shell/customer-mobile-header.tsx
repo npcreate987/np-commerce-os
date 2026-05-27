@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import {
+  BagIcon,
   BellIcon,
   SearchIcon,
   SparklesIcon,
@@ -57,9 +58,20 @@ export function CustomerMobileHeader(): JSX.Element {
 
         <ThemeToggle className="h-10 w-10" />
 
+        {/* Cart — bottom nav no longer carries a dedicated cart tab on mobile
+            (the TikTok-style 5-item layout reserves the slot for the
+            create-clip button), so we surface it here instead. */}
+        <Link
+          href="/cart"
+          aria-label="ตะกร้า"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-surface bg-surface-raised text-surface-strong active:scale-95"
+        >
+          <BagIcon className="h-4 w-4" />
+        </Link>
+
         <Link
           href="/inbox"
-          aria-label="กล่องข้อความ"
+          aria-label="การแจ้งเตือน"
           className="flex h-10 w-10 items-center justify-center rounded-2xl border border-surface bg-surface-raised text-surface-strong active:scale-95"
         >
           <BellIcon className="h-4 w-4" />

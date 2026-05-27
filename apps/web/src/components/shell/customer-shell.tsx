@@ -41,7 +41,10 @@ export function CustomerShell({ children }: { children: ReactNode }): JSX.Elemen
     <div
       className={cn(
         'bg-surface text-surface-strong min-h-dvh',
-        !immersive && 'pb-24 lg:pb-0',
+        // Reserve room for the mobile bottom nav (h-bottomnav-m = 72 px +
+        // safe-area padding). Slightly extra to keep CTAs comfortably clear
+        // of the nav bar on routes like cart / product / checkout.
+        !immersive && 'pb-28 lg:pb-0',
       )}
     >
       <NativeBridge authToken={token} />

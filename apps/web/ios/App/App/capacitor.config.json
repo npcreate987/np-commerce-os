@@ -1,6 +1,6 @@
 {
 	"appId": "app.np.commerce",
-	"appName": "NP Commerce",
+	"appName": "TuKTuK",
 	"webDir": "out",
 	"loggingBehavior": "debug",
 	"ios": {
@@ -28,7 +28,7 @@
 		"SplashScreen": {
 			"launchShowDuration": 1200,
 			"launchAutoHide": true,
-			"backgroundColor": "#FF3E5C",
+			"backgroundColor": "#1A0B26",
 			"androidSplashResourceName": "splash",
 			"androidScaleType": "CENTER_CROP",
 			"showSpinner": false,
@@ -37,7 +37,7 @@
 		},
 		"StatusBar": {
 			"style": "DARK",
-			"backgroundColor": "#FF3E5C",
+			"backgroundColor": "#1A0B26",
 			"overlaysWebView": false
 		},
 		"PushNotifications": {
@@ -54,7 +54,17 @@
 			"group": "NPCommercePrefs"
 		},
 		"Camera": {},
-		"Geolocation": {}
+		"Geolocation": {},
+		"CapacitorUpdater": {
+			"autoUpdate": false,
+			"autoDeleteFailed": true,
+			"autoDeletePrevious": true,
+			"resetWhenUpdate": false,
+			"directUpdate": false,
+			"updateUrl": "",
+			"channelUrl": "",
+			"statsUrl": ""
+		}
 	},
 	"packageClassList": [
 		"AppPlugin",

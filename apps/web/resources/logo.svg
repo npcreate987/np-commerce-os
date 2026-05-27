@@ -1,17 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="NP Commerce">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="TuKTuK">
   <defs>
+    <!-- Neon night-street background — dark plum with hot magenta accents -->
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF3E5C"/>
-      <stop offset="100%" stop-color="#FF6B7A"/>
+      <stop offset="0%" stop-color="#1A0B26"/>
+      <stop offset="50%" stop-color="#2A0F3E"/>
+      <stop offset="100%" stop-color="#190818"/>
     </linearGradient>
-    <linearGradient id="text" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#FFF1F3"/>
+    <radialGradient id="glow" cx="50%" cy="55%" r="55%">
+      <stop offset="0%" stop-color="#FF3E5C" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#7C5CFF" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <!-- TuKTuK wordmark — hot pink → cyan vertical neon gradient -->
+    <linearGradient id="word" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF6BD9"/>
+      <stop offset="50%" stop-color="#FF3E5C"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
     </linearGradient>
+    <filter id="neon" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="b1"/>
+      <feMerge>
+        <feMergeNode in="b1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
+
+  <!-- Rounded square mask (Android adaptive-safe — 1:1, opaque) -->
   <rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
-  <g fill="url(#text)" font-family="Helvetica, Arial, sans-serif" font-weight="900" text-anchor="middle">
-    <text x="512" y="640" font-size="520" letter-spacing="-24">NP</text>
+  <rect width="1024" height="1024" rx="232" fill="url(#glow)"/>
+
+  <!-- Wordmark "TuKTuK" — stacked TuK / TuK to match icon ref -->
+  <g font-family="Anuphan, 'SF Pro Display', Helvetica, Arial, sans-serif"
+     font-weight="900" text-anchor="middle" filter="url(#neon)">
+    <text x="512" y="475" font-size="320" fill="url(#word)" letter-spacing="-8">TuK</text>
+    <text x="512" y="790" font-size="320" fill="url(#word)" letter-spacing="-8">TuK</text>
   </g>
-  <circle cx="820" cy="780" r="44" fill="#FFE600"/>
+
+  <!-- Cyan accent dot (signature) -->
+  <circle cx="828" cy="836" r="34" fill="#22D3EE" opacity="0.9"/>
 </svg>

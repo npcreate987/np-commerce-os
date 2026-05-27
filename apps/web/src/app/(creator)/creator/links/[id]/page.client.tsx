@@ -69,10 +69,10 @@ export default function CreatorLinkDetailPage(): JSX.Element {
 
   const doShare = async () => {
     const ok = await nativeShare({
-      title: resolved?.label ?? resolved?.product?.name ?? 'NP Commerce',
+      title: resolved?.label ?? resolved?.product?.name ?? 'TuKTuK',
       text: resolved?.product?.name
         ? `ลองสินค้านี้สิ: ${resolved.product.name}`
-        : 'แนะนำของจาก NP Commerce',
+        : 'แนะนำของจาก TuKTuK',
       url: shortUrl,
       dialogTitle: 'แชร์ลิงก์',
     });

@@ -1,7 +1,16 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * NP Commerce OS — Capacitor config (Phase 15)
+ * TuKTuK (NP Commerce OS) — Capacitor config (Phase 15)
+ *
+ * Branding
+ * --------
+ * Display name = "TuKTuK" (see `appName` below + iOS Info.plist
+ * `CFBundleDisplayName` + Android `strings.xml` `app_name`).
+ *
+ * `appId` keeps the historical bundle identifier `app.np.commerce` because
+ * changing it would invalidate signing certificates and the App Store / Play
+ * Store records. The user-visible name is what's changing.
  *
  * โหมดการใช้งาน:
  * 1) Dev (live reload จากเครื่อง dev):
@@ -28,7 +37,7 @@ const isProd = process.env.NODE_ENV === 'production';
 
 const config: CapacitorConfig = {
   appId: 'app.np.commerce',
-  appName: 'NP Commerce',
+  appName: 'TuKTuK',
   webDir: 'out',
   loggingBehavior: isProd ? 'none' : 'debug',
   ios: {
@@ -65,7 +74,9 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 1200,
       launchAutoHide: true,
-      backgroundColor: '#FF3E5C',
+      // Matches the deep-plum gradient bg of the TuKTuK icon/splash so the
+      // launch-image transition reads as a continuous surface.
+      backgroundColor: '#1A0B26',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
@@ -74,7 +85,7 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'DARK',
-      backgroundColor: '#FF3E5C',
+      backgroundColor: '#1A0B26',
       overlaysWebView: false,
     },
     PushNotifications: {

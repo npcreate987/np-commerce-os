@@ -11,9 +11,9 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'ข้อกำหนดการใช้งาน · NP Commerce',
+  title: 'ข้อกำหนดการใช้งาน · TuKTuK',
   description:
-    'ข้อกำหนดการใช้งาน NP Commerce — สิทธิ หน้าที่ และข้อจำกัดของผู้ใช้และผู้ขาย',
+    'ข้อกำหนดการใช้งาน TuKTuK — สิทธิ หน้าที่ และข้อจำกัดของผู้ใช้และผู้ขาย',
 };
 
 export default function TermsPage(): JSX.Element {
@@ -37,7 +37,7 @@ export default function TermsPage(): JSX.Element {
       <section className="space-y-3">
         <h2 className="text-xl font-bold">1. ยอมรับข้อกำหนด</h2>
         <p className="text-sm leading-relaxed">
-          การสมัครหรือใช้แอป NP Commerce (เว็บ + iOS + Android) ถือว่าคุณ
+          การสมัครหรือใช้แอป TuKTuK (เว็บ + iOS + Android) ถือว่าคุณ
           ตกลงตามข้อกำหนดในเอกสารฉบับนี้และนโยบายความเป็นส่วนตัวที่{' '}
           <Link href="/legal/privacy" className="text-brand underline">
             /legal/privacy
@@ -154,7 +154,7 @@ export default function TermsPage(): JSX.Element {
         </Link>{' '}
         ·{' '}
         <Link href="/" className="text-brand hover:underline">
-          กลับ NP Commerce
+          กลับ TuKTuK
         </Link>
       </footer>
     </main>

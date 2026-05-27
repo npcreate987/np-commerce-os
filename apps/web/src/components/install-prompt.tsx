@@ -47,7 +47,7 @@ export function InstallPrompt(): JSX.Element | null {
     >
       <div className="container-mobile flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-card">
         <div className="flex-1">
-          <p className="text-sm font-semibold">ติดตั้ง NP Commerce ลงเครื่อง</p>
+          <p className="text-sm font-semibold">ติดตั้ง TuKTuK ลงเครื่อง</p>
           <p className="text-xs text-gray-500">เปิดเร็วขึ้น ใช้แบบแอปได้ทันที</p>
         </div>
         <button onClick={onClose} className="px-2 py-1 text-sm text-gray-500">

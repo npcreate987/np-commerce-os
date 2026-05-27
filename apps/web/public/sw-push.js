@@ -1,5 +1,5 @@
 /**
- * NP Commerce — dedicated push service worker
+ * TuKTuK — dedicated push service worker
  *
  * Why a separate SW from the next-pwa-generated `sw.js`?
  *   - Push events are routed to whichever SW owns the subscription; this file
@@ -14,11 +14,11 @@ self.addEventListener('push', (event) => {
     try {
       return event.data ? event.data.json() : {};
     } catch {
-      return { title: 'NP Commerce', body: event.data ? event.data.text() : '' };
+      return { title: 'TuKTuK', body: event.data ? event.data.text() : '' };
     }
   })();
 
-  const title = data.title || 'NP Commerce';
+  const title = data.title || 'TuKTuK';
   const body = data.body || '';
   const url = data.url || '/';
   const tag = data.tag || 'np';
