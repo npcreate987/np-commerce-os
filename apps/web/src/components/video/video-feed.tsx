@@ -16,18 +16,15 @@ import {
   HeartIcon,
   MusicIcon,
   MoreVerticalIcon,
-  PauseIcon,
   PlayIcon,
   PlusIcon,
-  RadioIcon,
   SearchIcon,
   ShareIcon,
   SparklesIcon,
-  VolumeOffIcon,
-  VolumeOnIcon,
 } from '@/components/icons';
 import { ReportSheet } from '@/components/video/report-sheet';
-import { useUserGeo } from '@/lib/use-user-geo';
+import { useUserGeo, type UserGeo } from '@/lib/use-user-geo';
+import { inferThaiRegionLabel } from '@/lib/thai-region';
 import type { VideoFeedItem } from '@np/types';
 
 /**
@@ -289,9 +286,18 @@ export function VideoFeed({
     });
   }, []);
 
+  // Phase 20.2 — TikTok-style tap behaviour. The very first tap unmutes
+  // (matches user expectations after seeing a muted preview), every tap
+  // after that toggles play/pause. We dropped the explicit mute button
+  // from the top bar to give the tabs more room to breathe, so this
+  // single gesture is the only way to bring the sound on.
   const onTapVideo = useCallback(() => {
+    if (muted) {
+      setMuted(false);
+      return;
+    }
     setPaused((p) => !p);
-  }, []);
+  }, [muted]);
 
   // ------- Render states -----------------------------------------------------
   if (feedQ.isLoading) {
@@ -357,12 +363,7 @@ export function VideoFeed({
         {/* Top tabs — TikTok-style: LIVE icon left, scroll-snap text tabs
             centred (with active underline), search icon right. Mobile only;
             desktop uses the shared CustomerTopBar. */}
-        <FeedTopBar
-          activeTab={activeTab}
-          onChangeTab={setActiveTab}
-          muted={muted}
-          onToggleMute={() => setMuted((m) => !m)}
-        />
+        <FeedTopBar activeTab={activeTab} onChangeTab={setActiveTab} geo={geo ?? null} />
 
         {/* === Reel container (mobile = full bleed, desktop = phone frame) === */}
         <div
@@ -717,71 +718,118 @@ export function VideoFeed({
  * Layout
  * ------
  *   ┌─────────────────────────────────────────────────────────────────┐
- *   │ [LIVE]  ชุมชน  ขอนแก่น  เพื่อน  กำลังติดตาม  สำหรับคุณ ▔   [🔍] │
+ *   │ ●LIVE   ชุมชน  ขอนแก่น  เพื่อน  กำลังติดตาม  สำหรับคุณ ▔    🔍  │
  *   └─────────────────────────────────────────────────────────────────┘
  *
- * - LIVE pill on the far left links to (future) `/feed?tab=live`.
- * - Centre is a horizontally scrollable strip with snap; the active tab is
- *   highlighted bold white with a small underline indicator. Inactive tabs
- *   render at 55 % opacity.
+ * - LIVE pill on the far left links to (future) `/feed?tab=live` and
+ *   sports a tiny red pulse dot so it reads as "live broadcast".
+ * - Centre is a horizontally scrollable strip with snap. The active tab
+ *   gets bold white text + a 24-px underline. Inactive tabs render at
+ *   ~70 % opacity (matching TikTok's visual rhythm — 55 % was too faint
+ *   against bright video backgrounds).
+ * - The "near me" tab adopts the user's actual city (กรุงเทพฯ / ขอนแก่น /
+ *   เชียงใหม่ / …) when geolocation is available, falling back to the
+ *   static "ใกล้ฉัน" label otherwise. The picker is a tiny inline
+ *   reverse-geocoder; see `lib/thai-region.ts`.
  * - Search icon on the far right opens `/search`.
- * - Mute toggle is folded into the right cluster (small, secondary).
+ * - Mute toggle is GONE — tap the video instead (handled by
+ *   `onTapVideo`). This frees ~32 px of horizontal real-estate for the
+ *   tab strip and matches TikTok's "tap to unmute / tap again to pause"
+ *   gesture model.
+ *
+ * Active-tab auto-scroll: when `activeTab` changes (e.g. user taps a
+ * tab that was offscreen-right) we scrollIntoView the button so the
+ * strip recenters smoothly.
  */
 function FeedTopBar({
   activeTab,
   onChangeTab,
-  muted,
-  onToggleMute,
+  geo,
 }: {
   activeTab: string;
   onChangeTab: (id: string) => void;
-  muted: boolean;
-  onToggleMute: () => void;
+  geo: UserGeo | null;
 }): JSX.Element {
-  const tabs: Array<{ id: string; label: string }> = [
-    { id: 'community', label: 'ชุมชน' },
-    { id: 'nearby', label: 'ใกล้ฉัน' },
-    { id: 'friends', label: 'เพื่อน' },
-    { id: 'following', label: 'กำลังติดตาม' },
-    { id: 'foryou', label: 'สำหรับคุณ' },
-  ];
+  // Phase 20.2 — dynamic label for the "near me" tab. `useMemo` so the
+  // haversine scan only re-runs when the lat/lng coarse-rounded changes
+  // (typing the dependency on `geo` itself causes Object identity churn
+  // every render of the parent).
+  const nearbyLabel = useMemo<string>(() => {
+    return inferThaiRegionLabel(geo) ?? 'ใกล้ฉัน';
+    // 2-decimal precision is ~1 km — fine for "what city am I in" purposes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo?.lat.toFixed(2), geo?.lng.toFixed(2)]);
+
+  const tabs: Array<{ id: string; label: string }> = useMemo(
+    () => [
+      { id: 'community', label: 'ชุมชน' },
+      { id: 'nearby', label: nearbyLabel },
+      { id: 'friends', label: 'เพื่อน' },
+      { id: 'following', label: 'กำลังติดตาม' },
+      { id: 'foryou', label: 'สำหรับคุณ' },
+    ],
+    [nearbyLabel],
+  );
+
+  // Keep the active tab horizontally centred when it changes. The native
+  // `scrollIntoView({ inline: 'center' })` does the smooth math for us.
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  useEffect(() => {
+    const el = tabRefs.current.get(activeTab);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [activeTab]);
 
   return (
     <div
       className="pointer-events-none absolute inset-x-0 top-0 z-30 lg:hidden"
       style={{ paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}
     >
-      <div className="pointer-events-auto flex items-center gap-2 pl-3 pr-2">
-        {/* LIVE pill — left */}
+      <div className="pointer-events-auto flex items-center gap-3 pl-3 pr-3">
+        {/* LIVE pill — left. Tiny pulsing red dot for "broadcast right now"
+            affordance; the wrap into `aria-label` keeps the dot decorative. */}
         <Link
           href="/feed?tab=live"
           aria-label="ดูถ่ายทอดสด"
           prefetch={false}
-          className="flex shrink-0 items-center gap-1 text-[12px] font-bold tracking-wide text-white/90 drop-shadow"
+          className="flex shrink-0 items-center gap-1.5 text-[13px] font-bold tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
         >
-          <RadioIcon className="h-4 w-4" />
+          <span aria-hidden className="relative inline-flex h-2 w-2">
+            <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/80" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+          </span>
           <span>LIVE</span>
         </Link>
 
-        {/* Tabs strip — center, horizontally scrollable on overflow */}
+        {/* Tabs strip — center, horizontally scrollable on overflow.
+            `gap-5` matches TikTok's roomy tab spacing on iOS; combined
+            with `scroll-padding-inline` keeps the active tab centred
+            instead of glued to the leading edge. */}
         <nav
           role="tablist"
           aria-label="ฟีดวิดีโอ"
-          className="hide-scrollbar -mx-1 flex flex-1 items-center gap-4 overflow-x-auto px-1 text-[13px] font-semibold"
-          style={{ scrollSnapType: 'x proximity' }}
+          className="hide-scrollbar -mx-1 flex flex-1 items-center gap-5 overflow-x-auto px-2 text-[14px] font-bold"
+          style={{ scrollSnapType: 'x proximity', scrollPaddingInline: '40%' }}
         >
           {tabs.map((t) => {
             const active = t.id === activeTab;
             return (
               <button
                 key={t.id}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(t.id, el);
+                  else tabRefs.current.delete(t.id);
+                }}
                 type="button"
                 role="tab"
                 aria-selected={active}
                 onClick={() => onChangeTab(t.id)}
                 className={cn(
-                  'relative shrink-0 whitespace-nowrap py-1.5 transition',
-                  active ? 'text-white drop-shadow' : 'text-white/55',
+                  'relative shrink-0 whitespace-nowrap py-1.5 transition-colors duration-150',
+                  active
+                    ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]'
+                    : 'text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]',
                 )}
                 style={{ scrollSnapAlign: 'center' }}
               >
@@ -789,7 +837,7 @@ function FeedTopBar({
                 {active ? (
                   <span
                     aria-hidden
-                    className="absolute -bottom-0.5 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-white"
+                    className="absolute -bottom-1 left-1/2 h-[3px] w-6 -translate-x-1/2 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
                   />
                 ) : null}
               </button>
@@ -797,26 +845,15 @@ function FeedTopBar({
           })}
         </nav>
 
-        {/* Right cluster — mute (secondary) + search */}
-        <button
-          type="button"
-          onClick={onToggleMute}
-          aria-label={muted ? 'เปิดเสียง' : 'ปิดเสียง'}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/85"
-        >
-          {muted ? (
-            <VolumeOffIcon className="h-4 w-4" />
-          ) : (
-            <VolumeOnIcon className="h-4 w-4" />
-          )}
-        </button>
+        {/* Search icon — right. The drop-shadow keeps the icon legible
+            on bright video backgrounds (e.g. daytime food clips). */}
         <Link
           href="/search"
           aria-label="ค้นหา"
           prefetch={false}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
         >
-          <SearchIcon className="h-5 w-5" />
+          <SearchIcon className="h-[22px] w-[22px]" />
         </Link>
       </div>
     </div>
