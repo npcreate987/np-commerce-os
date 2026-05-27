@@ -49,10 +49,28 @@ export class LogisticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listCarriers(): Promise<Carrier[]> {
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, code, name, kind, logoUrl, baseRateCents, perKgCents, etaText, active FROM carriers WHERE active = 1 ORDER BY kind, baseRateCents ASC`,
-    )) as DbCarrier[];
-    return rows.map((r) => this.toCarrier(r));
+    // Phase 20.1 — ported from raw SQL (`active = 1`, SQLite-only) to the
+    // Prisma client so this also works on Postgres (Railway production).
+    // Part of the broader Phase 19.6 sweep — listed here because the
+    // PromptPay e2e flow (checkout → /payments → /payments/by-order) is
+    // blocked when the cheapest available carrier can't be enumerated.
+    const rows = await this.prisma.carrier.findMany({
+      where: { active: true },
+      orderBy: [{ kind: 'asc' }, { baseRateCents: 'asc' }],
+    });
+    return rows.map((r) =>
+      this.toCarrier({
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        kind: r.kind,
+        logoUrl: r.logoUrl,
+        baseRateCents: r.baseRateCents,
+        perKgCents: r.perKgCents,
+        etaText: r.etaText,
+        active: r.active ? 1 : 0,
+      }),
+    );
   }
 
   async quote(input: ShippingQuoteRequest): Promise<ShippingQuote> {
@@ -222,13 +240,24 @@ export class LogisticsService {
   }
 
   private async findCarrierByCode(code: string): Promise<Carrier> {
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, code, name, kind, logoUrl, baseRateCents, perKgCents, etaText, active FROM carriers WHERE code = ? AND active = 1`,
-      code,
-    )) as DbCarrier[];
-    const first = rows[0];
-    if (!first) throw new BadRequestException(`Carrier not found: ${code}`);
-    return this.toCarrier(first);
+    // Phase 20.1 — same port as listCarriers above. The `code` column
+    // has a UNIQUE constraint so `findFirst` (with the `active` guard)
+    // matches the original behaviour with no scan.
+    const r = await this.prisma.carrier.findFirst({
+      where: { code, active: true },
+    });
+    if (!r) throw new BadRequestException(`Carrier not found: ${code}`);
+    return this.toCarrier({
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      kind: r.kind,
+      logoUrl: r.logoUrl,
+      baseRateCents: r.baseRateCents,
+      perKgCents: r.perKgCents,
+      etaText: r.etaText,
+      active: r.active ? 1 : 0,
+    });
   }
 
   private toCarrier(r: DbCarrier): Carrier {
