@@ -155,24 +155,30 @@ export class CheckoutService {
           include: { items: true },
         });
 
-        // Set carrierCode + coupon/discount via raw SQL (additive columns)
-        if (carrierCode) {
-          await tx.$executeRawUnsafe(
-            `UPDATE orders SET carrierCode = ? WHERE id = ?`,
-            carrierCode,
-            order.id,
-          );
-        }
+        // Phase 20.1 — ported from `$executeRawUnsafe` with SQLite `?`
+        // placeholders to Prisma client `update`. `carrierCode` /
+        // `couponCode` / `couponId` / `discountCents` / `redeemPoints`
+        // are no longer "additive columns" — they're first-class fields
+        // on the Order Prisma model, so a typed update is the right
+        // surface. We coalesce the two paths into one update so a
+        // checkout that uses both a carrier AND a coupon only emits a
+        // single UPDATE round-trip.
+        const orderPatch: {
+          carrierCode?: string | null;
+          couponCode?: string | null;
+          couponId?: string | null;
+          discountCents?: number;
+          redeemPoints?: number;
+        } = {};
+        if (carrierCode) orderPatch.carrierCode = carrierCode;
         if (subtotalDiscountCents > 0 || couponId || redeemPointsForShop > 0 || freeShipping) {
-          await tx.$executeRawUnsafe(
-            `UPDATE orders SET couponCode = ?, couponId = ?,
-                discountCents = ?, redeemPoints = ? WHERE id = ?`,
-            couponCode,
-            couponId,
-            subtotalDiscountCents,
-            redeemPointsForShop,
-            order.id,
-          );
+          orderPatch.couponCode = couponCode ?? null;
+          orderPatch.couponId = couponId ?? null;
+          orderPatch.discountCents = subtotalDiscountCents;
+          orderPatch.redeemPoints = redeemPointsForShop;
+        }
+        if (Object.keys(orderPatch).length > 0) {
+          await tx.order.update({ where: { id: order.id }, data: orderPatch });
         }
 
         // Redeem coupon usage — let errors bubble up so the txn rolls back.
