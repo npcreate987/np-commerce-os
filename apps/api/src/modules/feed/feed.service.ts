@@ -54,6 +54,47 @@ export interface FeedGeoOpts {
 }
 
 /**
+ * Phase 20.5 — feed surface tabs (mirrors the top-of-screen pills on the
+ * immersive reel).
+ *
+ *   foryou     — default. Personalised: score-ranked + geo-boosted if a
+ *                lat/lng is provided. Same algorithm we shipped in 19.7.
+ *   nearby     — STRICT geo. Only returns clips whose shop has an active
+ *                LocalStore within NEAR_ME_RADIUS_KM. If the viewer
+ *                didn't share location, this collapses to an empty list
+ *                (the client renders a "turn on location" empty state).
+ *   community  — pure popularity. No geo filtering or boosting; useful
+ *                for a viewer who wants the global pulse rather than
+ *                their local one.
+ *   following  — only clips by authors the viewer follows. Without a
+ *                Follow model in schema yet, this returns the empty
+ *                array; the client shows a "you're not following anyone"
+ *                empty state. Wired now so we can drop the model in
+ *                later without touching the surface.
+ *   friends    — alias for following until we ship a mutual-follow
+ *                graph; same empty-list behaviour for now.
+ */
+export type FeedTab =
+  | 'foryou'
+  | 'nearby'
+  | 'community'
+  | 'following'
+  | 'friends';
+
+const FEED_TABS: readonly FeedTab[] = [
+  'foryou',
+  'nearby',
+  'community',
+  'following',
+  'friends',
+] as const;
+
+export function parseFeedTab(raw: string | undefined | null): FeedTab {
+  if (!raw) return 'foryou';
+  return (FEED_TABS as readonly string[]).includes(raw) ? (raw as FeedTab) : 'foryou';
+}
+
+/**
  * Haversine great-circle distance in km between two lat/lng points.
  *
  * Accurate to ~0.5% over commerce-scale distances (any two points within
@@ -152,12 +193,62 @@ export class FeedService {
     cursor: number = 0,
     limit: number = 20,
     geo?: FeedGeoOpts,
+    tab: FeedTab = 'foryou',
   ): Promise<VideoFeedItem[]> {
     const lim = Math.min(Math.max(limit, 1), 50);
 
-    // Phase 19.7 — when the caller knows where they are, we pull a wider
-    // candidate pool (so distance-sort has room to work) and re-rank in JS.
-    // Without geo we keep the cheap O(N) score-ordered scan.
+    // Phase 20.5 — the "following" / "friends" tabs require a follow
+    // graph that we haven't shipped yet. Until then they short-circuit
+    // to an empty array (the client renders an explicit empty state
+    // so the viewer doesn't think the feed just broke).
+    if (tab === 'following' || tab === 'friends') {
+      return [];
+    }
+
+    // Phase 20.5 — "community" tab is the original pre-geo behaviour:
+    // pure score order across all ACTIVE clips, regardless of viewer
+    // location. Lets a curious viewer escape their local bubble.
+    if (tab === 'community') {
+      const videos = await this.prisma.videoPost.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: [{ score: 'desc' }, { createdAt: 'desc' }],
+        skip: cursor,
+        take: lim,
+      });
+      return this.hydrateFeed(videos, userId);
+    }
+
+    // Phase 20.5 — "nearby" tab is strict: only clips with an active
+    // LocalStore within NEAR_ME_RADIUS_KM. If the viewer hasn't shared
+    // location yet we return an empty array; the client surfaces a
+    // "turn on location" empty state instead of confusing the viewer
+    // with global content under a "near me" header.
+    if (tab === 'nearby') {
+      if (!geo) return [];
+      const poolSize = Math.min(lim * 8, 400);
+      const candidates = await this.prisma.videoPost.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: [{ score: 'desc' }, { createdAt: 'desc' }],
+        skip: cursor,
+        take: poolSize,
+      });
+      const hydrated = await this.hydrateFeed(candidates, userId, geo);
+      const near = hydrated.filter(
+        (v) =>
+          v.distanceKm !== null &&
+          v.distanceKm !== undefined &&
+          v.distanceKm <= NEAR_ME_RADIUS_KM,
+      );
+      near.sort(
+        (a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity),
+      );
+      return near.slice(0, lim);
+    }
+
+    // Phase 19.7 default ("foryou") — when the caller knows where they
+    // are, we pull a wider candidate pool (so distance-sort has room
+    // to work) and re-rank in JS. Without geo we keep the cheap O(N)
+    // score-ordered scan.
     if (!geo) {
       const videos = await this.prisma.videoPost.findMany({
         where: { status: 'ACTIVE' },

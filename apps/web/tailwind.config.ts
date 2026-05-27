@@ -81,7 +81,7 @@ const config: Config = {
       height: {
         'topbar-d': '64px',
         'topbar-m': '56px',
-        'bottomnav-m': '56px',
+        'bottomnav-m': '48px',
       },
       zIndex: {
         // Immersive content (e.g. /feed video reel) sits below chrome so the

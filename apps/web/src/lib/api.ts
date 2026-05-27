@@ -478,12 +478,20 @@ export const api = {
      * by distance (≤ 25 km) and tier-2 falls back to popularity score.
      * `lat`/`lng` are sent as plain query params (not in the body) so the
      * Capacitor static export can prefetch through a plain HTTP cache.
+     *
+     * Phase 20.5 — `tab` switches the surface:
+     *   • `'foryou'`    (default) score + optional geo boost
+     *   • `'nearby'`    strict geo filter; empty if no geo
+     *   • `'community'` pure score order, no geo
+     *   • `'following'` / `'friends'` — empty until the follow graph
+     *                                   ships (server returns []).
      */
     list: (
       token: string | null,
       cursor = 0,
       limit = 20,
       geo?: { lat: number; lng: number },
+      tab?: 'foryou' | 'nearby' | 'community' | 'following' | 'friends',
     ) =>
       request<VideoFeedItem[]>('GET', '/feed', {
         token: token ?? undefined,
@@ -491,6 +499,7 @@ export const api = {
           cursor,
           limit,
           ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
+          ...(tab && tab !== 'foryou' ? { tab } : {}),
         },
       }),
     one: (token: string | null, id: string) =>

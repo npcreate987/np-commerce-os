@@ -32,7 +32,7 @@ import {
 } from '../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/zod/zod-validation.pipe';
 import { Throttle } from '../../common/throttle/throttler';
-import { FeedService } from './feed.service';
+import { FeedService, parseFeedTab } from './feed.service';
 
 @Controller('feed')
 export class FeedController {
@@ -52,6 +52,7 @@ export class FeedController {
     @Query('limit') limit?: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
+    @Query('tab') tab?: string,
   ): Promise<VideoFeedItem[]> {
     const userId = this.userFromHeader(req);
     // Phase 19.7 — Geo is optional. We accept it as strings (Capacitor URL
@@ -69,11 +70,15 @@ export class FeedController {
       lngN <= 180
         ? { lat: latN, lng: lngN }
         : undefined;
+    // Phase 20.5 — `tab` is opt-in; unknown values fall back to
+    // "foryou" so older clients keep working through any future
+    // server-side relabeling.
     return this.feed.feed(
       userId,
       cursor ? Number(cursor) : 0,
       limit ? Number(limit) : 20,
       geo,
+      parseFeedTab(tab),
     );
   }
 

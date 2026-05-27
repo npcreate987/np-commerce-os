@@ -53,6 +53,14 @@ import type { VideoFeedItem } from '@np/types';
  * `fetcher` and `surface`.
  */
 
+/** Phase 20.5 — top-of-feed surface tabs. Mirrored on the server. */
+export type FeedTab =
+  | 'foryou'
+  | 'nearby'
+  | 'community'
+  | 'following'
+  | 'friends';
+
 export interface VideoFeedProps {
   /** Surface label for analytics. Defaults to `'feed'`. */
   surface?: string;
@@ -71,6 +79,48 @@ export interface VideoFeedProps {
 function formatBaht(cents: number | null): string | null {
   if (cents == null) return null;
   return `฿${(cents / 100).toLocaleString('th-TH', { maximumFractionDigits: 0 })}`;
+}
+
+/**
+ * Phase 20.5 — per-tab empty-state copy.
+ *
+ * - `following`/`friends`  — no follow graph yet, so the viewer is
+ *                            explicitly told the feature is coming.
+ * - `nearby` (no geo)      — prompt the viewer to enable location.
+ * - `nearby` (geo)         — no shops within radius yet; nudge them to
+ *                            the global community tab.
+ * - everything else        — generic "no clips" with shop fallback.
+ */
+function emptyCopyForTab(
+  tab: FeedTab,
+  hasGeo: boolean,
+): { title: string; body: string; ctaHref?: string; ctaLabel?: string } {
+  if (tab === 'following' || tab === 'friends') {
+    return {
+      title: tab === 'friends' ? 'ยังไม่มีเพื่อน' : 'ยังไม่ได้ติดตามใคร',
+      body: 'ฟีเจอร์นี้กำลังจะมาเร็ว ๆ นี้ — เริ่มต้นด้วยการสำรวจฟีดสำหรับคุณ',
+      ctaHref: '/feed',
+      ctaLabel: 'ไปสำรวจ',
+    };
+  }
+  if (tab === 'nearby') {
+    if (!hasGeo) {
+      return {
+        title: 'เปิดตำแหน่งเพื่อดูคลิปใกล้คุณ',
+        body: 'อนุญาตการเข้าถึงตำแหน่งในการตั้งค่าเครื่อง แล้วเปิดแอปใหม่อีกครั้ง',
+      };
+    }
+    return {
+      title: 'ยังไม่มีร้านใกล้คุณ',
+      body: 'ลองเปิดแท็บ "สำหรับคุณ" หรือ "ชุมชน" เพื่อดูคลิปจากทั่วประเทศ',
+    };
+  }
+  return {
+    title: 'ยังไม่มีคลิป',
+    body: 'ครีเอเตอร์กำลังลงคลิปใหม่ ๆ — กลับมาเร็ว ๆ นี้',
+    ctaHref: '/feed/shop',
+    ctaLabel: 'เปิดดูสินค้า',
+  };
 }
 
 function formatCount(n: number): string {
@@ -102,18 +152,31 @@ export function VideoFeed({
   const geo = useUserGeo();
   const geoReady = geo !== undefined;
 
+  // ------- Top tabs state ----------------------------------------------------
+  // Phase 20.5 — the active tab is now wired into the feed query. Each
+  // tab calls into a different code-path on the API:
+  //   foryou    — current default (score + optional geo boost)
+  //   nearby    — strict geo filter; empty if no geo permission
+  //   community — pure score order, no geo
+  //   following / friends — empty until follow graph ships
+  //
+  // We default to 'foryou' so the first paint matches the prior behaviour
+  // and users with no geo permission still see content.
+  const [activeTab, setActiveTab] = useState<FeedTab>('foryou');
+
   // ------- Data: infinite paginated list -------------------------------------
   const listFn =
     fetcher ??
     ((cursor: number, limit: number) =>
-      api.feed.list(token ?? null, cursor, limit, geo ?? undefined));
+      api.feed.list(token ?? null, cursor, limit, geo ?? undefined, activeTab));
 
   const feedQ = useInfiniteQuery({
-    // Geo is part of the cache key so a user travelling between cities
-    // gets fresh "near me" results and doesn't reuse a stale Bangkok list.
+    // Tab + geo are part of the cache key so each tab gets its own list
+    // and a user travelling between cities gets fresh "near me" results.
     queryKey: [
       'feed',
       'videos',
+      activeTab,
       token ? 'auth' : 'anon',
       geo ? `${geo.lat.toFixed(2)}_${geo.lng.toFixed(2)}` : 'no-geo',
     ],
@@ -138,8 +201,6 @@ export function VideoFeed({
   // ------- Top tabs state (visual only for now) ------------------------------
   // The reel still serves the same feed regardless of the active tab — these
   // are placeholders for the upcoming Following / Near-me / Live experiences.
-  const [activeTab, setActiveTab] = useState<string>('foryou');
-
   const scrollerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const slideRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -317,28 +378,37 @@ export function VideoFeed({
   }
 
   if (items.length === 0) {
+    // Phase 20.5 — tab-aware empty state. The /feed page itself is still
+    // mounted (FeedTopBar visible above) so the viewer can swipe to a
+    // different tab. We surface that affordance in the copy.
+    const empty = emptyCopyForTab(activeTab, !!geo);
     return (
       <div
         className={cn(
-          'flex flex-col items-center justify-center gap-4 bg-black text-white',
-          mode === 'immersive' ? 'fixed inset-0 z-immersive' : 'h-full w-full',
+          'relative bg-black text-white',
+          mode === 'immersive'
+            ? 'fixed inset-0 z-immersive'
+            : 'h-full w-full',
         )}
       >
-        <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10">
-          <SparklesIcon className="h-8 w-8 text-white/60" />
+        <FeedTopBar activeTab={activeTab} onChangeTab={setActiveTab} geo={geo ?? null} />
+        <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10">
+            <SparklesIcon className="h-8 w-8 text-white/60" />
+          </div>
+          <div>
+            <p className="font-display text-base font-bold">{empty.title}</p>
+            <p className="mt-1 text-xs text-white/60">{empty.body}</p>
+          </div>
+          {empty.ctaHref ? (
+            <Link
+              href={empty.ctaHref}
+              className="rounded-full bg-white px-5 py-2 text-xs font-semibold text-ink-900"
+            >
+              {empty.ctaLabel}
+            </Link>
+          ) : null}
         </div>
-        <div className="px-6 text-center">
-          <p className="font-display text-base font-bold">ยังไม่มีคลิป</p>
-          <p className="mt-1 text-xs text-white/60">
-            ครีเอเตอร์กำลังลงคลิปใหม่ ๆ — กลับมาเร็ว ๆ นี้
-          </p>
-        </div>
-        <Link
-          href="/feed/shop"
-          className="rounded-full bg-white px-5 py-2 text-xs font-semibold text-ink-900"
-        >
-          เปิดดูสินค้า
-        </Link>
       </div>
     );
   }
@@ -456,17 +526,13 @@ export function VideoFeed({
                       • 10-px labels (was 11 px) with gap-0.5 hugging the
                         button to keep each "row" visually tight
 
-                    Phase 20.4 — rail bottom anchors 4 px above the 56-px
-                    black bottom nav (was 104 px above the screen edge,
-                    which left a 48-px floating gap once the bar was
-                    shrunk). The new offset = nav-height (3.5rem) + tiny
-                    breathing room (0.25rem) + safe-area inset. The music
-                    disc now sits flush against the top of the bar,
-                    matching the TikTok reference.                            */}
+                    Phase 20.4 — rail bottom anchors 4 px above the 48-px
+                    black bottom nav. The offset = nav-height (3rem) +
+                    tiny breathing room (0.25rem) + safe-area inset.   */}
                 <div
                   className="absolute right-2 z-20 flex flex-col items-center gap-2.5"
                   style={{
-                    bottom: 'calc(env(safe-area-inset-bottom) + 3.75rem)',
+                    bottom: 'calc(env(safe-area-inset-bottom) + 3.25rem)',
                   }}
                 >
                   {/* Creator avatar with + follow */}
@@ -606,14 +672,13 @@ export function VideoFeed({
                 </div>
 
                 {/* === Bottom caption + product CTA ========================
-                    Phase 20.4 — paddingBottom now clears the 56-px black
-                    bottom nav (3.5rem) + a 0.75-rem buffer so the product
-                    CTA pill — the last item in the stack — sits cleanly
-                    above the bar instead of being half-clipped by it.    */}
+                    Phase 20.4 — paddingBottom clears the 48-px black
+                    bottom nav (3rem) + a 0.75-rem buffer so the product
+                    CTA pill sits cleanly above the bar.                 */}
                 <div
                   className="absolute inset-x-0 bottom-0 z-10 px-4 pb-5 pr-20"
                   style={{
-                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 4.25rem)',
+                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 3.75rem)',
                   }}
                 >
                   <div className="space-y-2">
@@ -769,8 +834,8 @@ function FeedTopBar({
   onChangeTab,
   geo,
 }: {
-  activeTab: string;
-  onChangeTab: (id: string) => void;
+  activeTab: FeedTab;
+  onChangeTab: (id: FeedTab) => void;
   geo: UserGeo | null;
 }): JSX.Element {
   // Phase 20.2 — dynamic label for the "near me" tab. `useMemo` so the
@@ -783,7 +848,7 @@ function FeedTopBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo?.lat.toFixed(2), geo?.lng.toFixed(2)]);
 
-  const tabs: Array<{ id: string; label: string }> = useMemo(
+  const tabs: Array<{ id: FeedTab; label: string }> = useMemo(
     () => [
       { id: 'community', label: 'ชุมชน' },
       { id: 'nearby', label: nearbyLabel },
