@@ -169,18 +169,23 @@ export class OrderService {
   }
 
   private async toOrder(o: DbOrder): Promise<Order> {
-    // carrierCode / coupon / discount sit on additive columns Prisma doesn't know about
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT carrierCode, couponCode, discountCents FROM orders WHERE id = ?`,
-      o.id,
-    )) as Array<{
+    // Phase 20.1 — `carrierCode` / `couponCode` / `discountCents` used to be
+    // additive columns invisible to Prisma, so this helper used to fetch
+    // them via a follow-up `$queryRawUnsafe`. Since the Postgres migration
+    // they're all proper Order fields, but the SQLite `?` placeholder
+    // never got cleaned up and was 500-ing every `GET /orders/:id`. The
+    // cheapest fix is to drop the extra query entirely — the value is
+    // already on `o`. (The `as unknown as DbOrder` cast a few lines up
+    // narrows away these fields; we re-expose them through the wider
+    // shape.)
+    const wide = o as DbOrder & {
       carrierCode: string | null;
       couponCode: string | null;
       discountCents: number | null;
-    }>;
-    const carrierCode: string | null = rows[0]?.carrierCode ?? null;
-    const couponCode: string | null = rows[0]?.couponCode ?? null;
-    const discountCents: number = rows[0]?.discountCents ?? 0;
+    };
+    const carrierCode: string | null = wide.carrierCode ?? null;
+    const couponCode: string | null = wide.couponCode ?? null;
+    const discountCents: number = wide.discountCents ?? 0;
 
     return {
       id: o.id,
