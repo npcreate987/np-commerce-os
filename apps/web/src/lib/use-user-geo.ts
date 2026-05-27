@@ -39,11 +39,20 @@ interface CachedGeo {
   at: number;
 }
 
-function readCache(): CachedGeo | null {
-  if (typeof window === 'undefined') return null;
+/**
+ * Reads the cached geo. Returns:
+ *   - `{lat,lng}` on cache hit (the user has previously granted location)
+ *   - `undefined` on cache miss (we should re-probe the platform)
+ *
+ * Note: we intentionally never persist `null` (deny) — a denied permission
+ * could be granted later in the same session via the OS settings, so we
+ * always retry on a fresh mount.
+ */
+function readCache(): UserGeo | undefined {
+  if (typeof window === 'undefined') return undefined;
   try {
     const raw = window.sessionStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
+    if (!raw) return undefined;
     const parsed = JSON.parse(raw) as CachedGeo;
     if (
       typeof parsed?.lat === 'number' &&
@@ -51,12 +60,12 @@ function readCache(): CachedGeo | null {
       Number.isFinite(parsed.lat) &&
       Number.isFinite(parsed.lng)
     ) {
-      return parsed;
+      return { lat: parsed.lat, lng: parsed.lng };
     }
   } catch {
     /* swallow — corrupt cache, treat as miss */
   }
-  return null;
+  return undefined;
 }
 
 function writeCache(g: UserGeo): void {

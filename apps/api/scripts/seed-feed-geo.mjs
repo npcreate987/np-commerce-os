@@ -95,6 +95,47 @@ const SEEDS = [
     caption: 'ส่งทั่วประเทศ ผ่านขนส่ง — ไม่มีหน้าร้าน',
     local: null, // intentionally non-local
   },
+  // ─────────────────────────────────────────────────────────────────────────
+  // Phase 19.7 device-side demo — three shops within ~10 km of the dev
+  // device's actual location (NE Thailand, ~16.5 N / 103.5 E) so a near-me
+  // sort actually returns near-me clips on the test phone. Bangkok-based
+  // users still see the Siam/Asoke/Bang Sue cluster as tier-1.
+  // ─────────────────────────────────────────────────────────────────────────
+  // Three shops within ~5 km of the test device (Khon Kaen, ~16.44 N /
+  // 102.88 E). Production users in Bangkok still see the Siam cluster first.
+  {
+    key: 'kk-noodle',
+    email: 'creator-kk-noodle@np.dev',
+    name: 'นู๋นา ขอนแก่น',
+    shopSlug: 'kk-noodle-19-7',
+    shopName: 'ขอนแก่นก๋วยเตี๋ยวเรือ',
+    productName: 'ก๋วยเตี๋ยวเรือต้มยำ',
+    priceCents: 5500,
+    caption: 'ก๋วยเตี๋ยวเรือต้มยำหม้อใหญ่ — รับที่ร้านในเมืองขอนแก่น',
+    local: { lat: 16.4400, lng: 102.8800, addressText: 'ตลาดบางลำพู ขอนแก่น', kind: 'RESTAURANT' },
+  },
+  {
+    key: 'kk-cafe',
+    email: 'creator-kk-cafe@np.dev',
+    name: 'เอม คาเฟ่ขอนแก่น',
+    shopSlug: 'kk-cafe-19-7',
+    shopName: 'KK Slow Bar',
+    productName: 'กาแฟดริปดอยช้าง',
+    priceCents: 7500,
+    caption: 'กาแฟดริปดอยช้าง สด ๆ จากร้านในซอย ขอนแก่น',
+    local: { lat: 16.4500, lng: 102.8350, addressText: 'ซอยข้างศาลากลาง', kind: 'CAFE' },
+  },
+  {
+    key: 'kk-craft',
+    email: 'creator-kk-craft@np.dev',
+    name: 'ลุงสมชาย ผ้าฝ้าย',
+    shopSlug: 'kk-craft-19-7',
+    shopName: 'KK Cotton Craft',
+    productName: 'ผ้าฝ้ายทอมือ ผืนใหญ่',
+    priceCents: 89000,
+    caption: 'ผ้าฝ้ายทอมือ ย้อมครามธรรมชาติ — ทอเอง ขายเอง ขอนแก่น',
+    local: { lat: 16.4200, lng: 102.9100, addressText: 'หมู่บ้านโนนสวรรค์', kind: 'LOCAL_GOODS' },
+  },
 ];
 
 // Sample free-stock MP4 (BigBuckBunny is the universally-CDNed clip with CORS-OK).
