@@ -274,20 +274,24 @@ export class FeedService {
     if (rows[0].authorId !== userId) {
       throw new BadRequestException('ลบได้เฉพาะคลิปของตัวเอง');
     }
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE video_posts SET status = 'DELETED', updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
-      videoId,
-    );
+    // Phase 19.5 — Prisma client (DB-agnostic) instead of raw SQL with SQLite
+    // `?` placeholders + `datetime('now')`.
+    await this.prisma.videoPost.update({
+      where: { id: videoId },
+      data: { status: 'DELETED' },
+    });
     await this.cleanupBucketObjects(rows[0].videoUrl, rows[0].thumbUrl);
     // Author removes their own video → auto-resolve any open reports against
     // it ("DELETE" disposition) so it disappears from the admin queue cleanly.
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE video_reports
-       SET status='RESOLVED', resolvedBy=?, resolvedAt=datetime('now'), resolution='DELETE'
-       WHERE videoId=? AND status='PENDING'`,
-      userId,
-      videoId,
-    );
+    await this.prisma.videoReport.updateMany({
+      where: { videoId, status: 'PENDING' },
+      data: {
+        status: 'RESOLVED',
+        resolvedBy: userId,
+        resolvedAt: new Date(),
+        resolution: 'DELETE',
+      },
+    });
     return { ok: true };
   }
 
@@ -511,19 +515,19 @@ export class FeedService {
     const resolution =
       input.action === 'HIDE' ? 'HIDE' : input.action === 'RESTORE' ? 'KEEP' : 'DELETE';
 
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE video_posts SET status=?, updatedAt=CURRENT_TIMESTAMP WHERE id=?`,
-      targetStatus,
-      videoId,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE video_reports
-       SET status='RESOLVED', resolvedBy=?, resolvedAt=datetime('now'), resolution=?
-       WHERE videoId=? AND status='PENDING'`,
-      adminUserId,
-      resolution,
-      videoId,
-    );
+    await this.prisma.videoPost.update({
+      where: { id: videoId },
+      data: { status: targetStatus },
+    });
+    await this.prisma.videoReport.updateMany({
+      where: { videoId, status: 'PENDING' },
+      data: {
+        status: 'RESOLVED',
+        resolvedBy: adminUserId,
+        resolvedAt: new Date(),
+        resolution,
+      },
+    });
 
     if (input.action === 'DELETE') {
       await this.cleanupBucketObjects(rows[0].videoUrl, rows[0].thumbUrl);

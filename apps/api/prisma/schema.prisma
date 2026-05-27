@@ -159,20 +159,20 @@ model CartItem {
 }
 
 model Order {
-  id            String   @id @default(cuid())
-  customerId    String
-  customer      User     @relation(fields: [customerId], references: [id])
-  shopId        String
-  shop          Shop     @relation(fields: [shopId], references: [id])
+  id                  String   @id @default(cuid())
+  customerId          String
+  customer            User     @relation(fields: [customerId], references: [id])
+  shopId              String
+  shop                Shop     @relation(fields: [shopId], references: [id])
   /// "PENDING_PAYMENT" | "PAID" | "READY_TO_SHIP" | "SHIPPED" | "DELIVERED" | "COMPLETED" | "CANCELLED" | "REFUNDED"
-  status        String   @default("PENDING_PAYMENT")
-  subtotalCents Int
-  shippingCents Int      @default(0)
-  totalCents    Int
+  status              String   @default("PENDING_PAYMENT")
+  subtotalCents       Int
+  shippingCents       Int      @default(0)
+  totalCents          Int
   /// JSON-stringified Address (Phase 1 dev compat)
   shippingAddressJson String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   items    OrderItem[]
   payment  Payment?
@@ -203,19 +203,27 @@ model OrderItem {
 }
 
 model Payment {
-  id            String   @id @default(cuid())
-  orderId       String   @unique
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  orderId        String   @unique
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   /// "PROMPTPAY" | "CARD" | "COD"
-  method        String
+  method         String
   /// "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
-  status        String   @default("PENDING")
-  amountCents   Int
-  qrCodePayload String?
-  providerRef   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  status         String   @default("PENDING")
+  amountCents    Int
+  qrCodePayload  String?
+  /// PSP-specific charge id ('chrg_xxx' for Omise, 'pi_xxx' for Stripe).
+  /// Webhook handler looks up the payments row by this ref.
+  /// Phase 19.5 — moved from bootstrap-phase13 SQL additive column.
+  provider       String?
+  providerRef    String?
+  /// Reason the provider gave us when a charge ended in FAILED.
+  /// Surfaced verbatim to the customer's "payment failed" page.
+  failureMessage String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
+  @@index([providerRef])
   @@map("payments")
 }
 
@@ -295,18 +303,18 @@ model Shipment {
 
 /// NP Protect — Dispute / Refund
 model Dispute {
-  id          String   @id @default(cuid())
-  orderId     String   @unique
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  orderId      String   @unique
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   /// "OPEN" | "MERCHANT_REPLIED" | "ESCALATED" | "RESOLVED_REFUND" | "RESOLVED_RELEASE" | "CLOSED"
-  status      String   @default("OPEN")
+  status       String   @default("OPEN")
   /// "ITEM_NOT_RECEIVED" | "NOT_AS_DESCRIBED" | "DAMAGED" | "OTHER"
-  reason      String
-  description String
+  reason       String
+  description  String
   /// JSON array of image URLs
-  evidenceJson String  @default("[]")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  evidenceJson String   @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   messages DisputeMessage[]
 
@@ -334,22 +342,22 @@ model DisputeMessage {
 
 /// โปรไฟล์ Creator — ทุก user เป็น creator ได้โดยไม่เปลี่ยน role
 model CreatorProfile {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  displayName         String
-  bio                 String?
-  avatarUrl           String?
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  displayName          String
+  bio                  String?
+  avatarUrl            String?
   /// JSON array ของ {platform, url} เช่น TikTok, IG, YouTube
-  socialJson          String   @default("[]")
+  socialJson           String   @default("[]")
   /// "PENDING" | "ACTIVE" | "SUSPENDED"
-  status              String   @default("ACTIVE")
+  status               String   @default("ACTIVE")
   /// คอมมิชชั่นเริ่มต้น (basis points; 500 = 5%)
-  defaultCommissionBps Int     @default(500)
+  defaultCommissionBps Int      @default(500)
   /// สถิติสะสม (อัปเดตเมื่อมีการ release)
-  totalSalesCents     Int      @default(0)
-  totalCommissionCents Int     @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  totalSalesCents      Int      @default(0)
+  totalCommissionCents Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   links CreatorLink[]
 
@@ -359,22 +367,22 @@ model CreatorProfile {
 
 /// ลิงก์โปรโมท — ต่อสินค้า/ต่อร้าน
 model CreatorLink {
-  id             String   @id @default(cuid())
-  creatorId      String
-  creator        CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  creatorId       String
+  creator         CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   /// short code สำหรับ public URL /r/[code]
-  code           String   @unique
+  code            String         @unique
   /// ผูกกับสินค้า (ถ้า null = ลิงก์ระดับร้าน)
-  productId      String?
-  shopId         String?
-  label          String?
+  productId       String?
+  shopId          String?
+  label           String?
   /// override อัตราคอมมิชชั่น; null = ใช้ defaultCommissionBps ของ creator
-  commissionBps  Int?
-  clickCount     Int      @default(0)
-  conversionCount Int     @default(0)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  commissionBps   Int?
+  clickCount      Int            @default(0)
+  conversionCount Int            @default(0)
+  active          Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   clicks       AffiliateClick[]
   attributions AffiliateAttribution[]
@@ -387,14 +395,14 @@ model CreatorLink {
 
 /// บันทึก click — สำหรับ analytics
 model AffiliateClick {
-  id        String   @id @default(cuid())
-  linkId    String
-  link      CreatorLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  id          String      @id @default(cuid())
+  linkId      String
+  link        CreatorLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
   /// hash ของ IP+UA — ใช้นับ unique อย่างหยาบ ๆ
   fingerprint String?
   ua          String?
   refererUrl  String?
-  createdAt DateTime @default(now())
+  createdAt   DateTime    @default(now())
 
   @@index([linkId, createdAt])
   @@map("affiliate_clicks")
@@ -402,8 +410,8 @@ model AffiliateClick {
 
 /// การ attribute ของ order → link → creator (1 order = 1 attribution)
 model AffiliateAttribution {
-  id              String   @id @default(cuid())
-  orderId         String   @unique
+  id              String      @id @default(cuid())
+  orderId         String      @unique
   linkId          String
   link            CreatorLink @relation(fields: [linkId], references: [id])
   creatorId       String
@@ -414,8 +422,8 @@ model AffiliateAttribution {
   /// commission ที่คำนวณตอน checkout (= subtotal * bps / 10000)
   commissionCents Int
   /// "PENDING" | "RELEASED" | "REVERSED"
-  status          String   @default("PENDING")
-  createdAt       DateTime @default(now())
+  status          String      @default("PENDING")
+  createdAt       DateTime    @default(now())
   releasedAt      DateTime?
 
   @@index([creatorId, status])
@@ -472,11 +480,11 @@ model MenuCategory {
 
 /// แมป product → menu_category (1 product อยู่ได้หลายหมวด)
 model MenuItemMap {
-  id         String   @id @default(cuid())
+  id         String       @id @default(cuid())
   categoryId String
   category   MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   productId  String
-  sort       Int      @default(0)
+  sort       Int          @default(0)
 
   @@unique([categoryId, productId])
   @@index([productId])
@@ -502,20 +510,20 @@ model TimeSlot {
 
 /// rider profile (ทุก user เป็น rider ได้)
 model Rider {
-  id        String   @id @default(cuid())
-  userId    String   @unique
+  id                 String   @id @default(cuid())
+  userId             String   @unique
   /// "BIKE" | "MOTORCYCLE" | "CAR"
-  vehicle   String   @default("MOTORCYCLE")
+  vehicle            String   @default("MOTORCYCLE")
   /// "PENDING" | "ACTIVE" | "SUSPENDED"
-  status    String   @default("ACTIVE")
+  status             String   @default("ACTIVE")
   /// "OFFLINE" | "AVAILABLE" | "BUSY"
-  online    String   @default("OFFLINE")
-  lat       Float?
-  lng       Float?
-  totalDeliveries Int  @default(0)
-  totalEarningsCents Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  online             String   @default("OFFLINE")
+  lat                Float?
+  lng                Float?
+  totalDeliveries    Int      @default(0)
+  totalEarningsCents Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   jobs DeliveryJob[]
 
@@ -525,30 +533,30 @@ model Rider {
 
 /// งานส่งของ — สร้างเมื่อ Order PAID + carrier เป็น EXPRESS_LOCAL
 model DeliveryJob {
-  id           String   @id @default(cuid())
-  orderId      String   @unique
-  riderId      String?
-  rider        Rider?   @relation(fields: [riderId], references: [id])
+  id            String    @id @default(cuid())
+  orderId       String    @unique
+  riderId       String?
+  rider         Rider?    @relation(fields: [riderId], references: [id])
   /// "REQUESTED" | "ASSIGNED" | "PICKED_UP" | "DELIVERED" | "FAILED" | "CANCELLED"
-  status       String   @default("REQUESTED")
+  status        String    @default("REQUESTED")
   /// ที่อยู่ร้าน (pickup)
-  pickupLat    Float
-  pickupLng    Float
-  pickupText   String
+  pickupLat     Float
+  pickupLng     Float
+  pickupText    String
   /// ที่อยู่ลูกค้า (drop)
-  dropLat      Float
-  dropLng      Float
-  dropText     String
-  distanceKm   Float    @default(0)
+  dropLat       Float
+  dropLng       Float
+  dropText      String
+  distanceKm    Float     @default(0)
   /// ค่าตอบแทนผู้ขับ (cents) — ส่วนนี้แยกจาก escrow ของ shop ในเฟสนี้
-  riderFeeCents Int     @default(0)
+  riderFeeCents Int       @default(0)
   /// notes ระหว่างทาง
-  noteJson     String   @default("[]")
-  assignedAt   DateTime?
-  pickedUpAt   DateTime?
-  deliveredAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  noteJson      String    @default("[]")
+  assignedAt    DateTime?
+  pickedUpAt    DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([status, createdAt])
   @@index([riderId, status])
@@ -561,32 +569,32 @@ model DeliveryJob {
 
 /// คูปองส่วนลด (เป็นของแพลตฟอร์ม หรือ ของร้าน)
 model Coupon {
-  id            String   @id @default(cuid())
+  id               String    @id @default(cuid())
   /// null = คูปองของแพลตฟอร์ม, มี shopId = คูปองของร้าน
-  shopId        String?
-  code          String   @unique
-  title         String
-  description   String?
+  shopId           String?
+  code             String    @unique
+  title            String
+  description      String?
   /// "PERCENT" | "FIXED" | "FREE_SHIPPING"
-  kind          String   @default("PERCENT")
+  kind             String    @default("PERCENT")
   /// PERCENT: 1-10000 (basis points: 1000 = 10%)
   /// FIXED: cents
   /// FREE_SHIPPING: ignored (= ส่งฟรี)
-  value         Int      @default(0)
+  value            Int       @default(0)
   /// ยอดขั้นต่ำต่อออเดอร์ (cents) ถึงจะใช้คูปองได้
-  minSpendCents Int      @default(0)
+  minSpendCents    Int       @default(0)
   /// ส่วนลดสูงสุด (cents) — สำหรับ PERCENT
-  maxDiscountCents Int   @default(0)
+  maxDiscountCents Int       @default(0)
   /// จำนวนการใช้รวมทั้งหมด (0 = ไม่จำกัด)
-  totalLimit    Int      @default(0)
+  totalLimit       Int       @default(0)
   /// จำนวนการใช้ต่อคน (0 = ไม่จำกัด)
-  perUserLimit  Int      @default(1)
-  used          Int      @default(0)
-  startsAt      DateTime @default(now())
-  endsAt        DateTime?
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  perUserLimit     Int       @default(1)
+  used             Int       @default(0)
+  startsAt         DateTime  @default(now())
+  endsAt           DateTime?
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   redemptions CouponRedemption[]
 
@@ -597,13 +605,13 @@ model Coupon {
 
 /// บันทึกการใช้คูปอง (ผูกกับ order)
 model CouponRedemption {
-  id             String   @id @default(cuid())
-  couponId       String
-  coupon         Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  userId         String
-  orderId        String?
-  discountCents  Int
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  couponId      String
+  coupon        Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId        String
+  orderId       String?
+  discountCents Int
+  createdAt     DateTime @default(now())
 
   @@unique([couponId, orderId])
   @@index([couponId, userId])
@@ -613,16 +621,16 @@ model CouponRedemption {
 
 /// บัญชี Loyalty point ต่อ user (1 user มี 1 บัญชี)
 model LoyaltyAccount {
-  id          String   @id @default(cuid())
-  userId      String   @unique
+  id             String   @id @default(cuid())
+  userId         String   @unique
   /// แต้มคงเหลือ
-  points      Int      @default(0)
+  points         Int      @default(0)
   /// แต้มสะสมตลอดชีพ (สำหรับคำนวณ tier)
-  lifetimePoints Int   @default(0)
+  lifetimePoints Int      @default(0)
   /// "BRONZE" | "SILVER" | "GOLD" | "PLATINUM"
-  tier        String   @default("BRONZE")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tier           String   @default("BRONZE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   entries LoyaltyEntry[]
 
@@ -631,17 +639,17 @@ model LoyaltyAccount {
 
 /// รายการเดินบัญชี loyalty
 model LoyaltyEntry {
-  id          String   @id @default(cuid())
-  accountId   String
-  account     LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String         @id @default(cuid())
+  accountId String
+  account   LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   /// "EARN" | "REDEEM" | "EXPIRE" | "REVERSE" | "ADJUST"
-  kind        String
-  points      Int
+  kind      String
+  points    Int
   /// อ้างอิง order / coupon / referral
-  refType     String?
-  refId       String?
-  note        String?
-  createdAt   DateTime @default(now())
+  refType   String?
+  refId     String?
+  note      String?
+  createdAt DateTime       @default(now())
 
   @@index([accountId, createdAt])
   @@index([refType, refId])
@@ -650,17 +658,17 @@ model LoyaltyEntry {
 
 /// ระบบ Referral (ลูกค้าชวนลูกค้า)
 model Referral {
-  id          String   @id @default(cuid())
+  id                  String   @id @default(cuid())
   /// คนชวน
-  inviterId   String
+  inviterId           String
   /// รหัสที่ใช้ผูกกับ link เช่น "ABC123"
-  code        String   @unique
+  code                String   @unique
   /// แต้มที่ inviter จะได้เมื่อมีคนรับ
-  rewardPoints Int     @default(50)
+  rewardPoints        Int      @default(50)
   /// แต้มที่ invitee (คนรับเชิญ) จะได้เมื่อสมัครสำเร็จ
-  inviteeRewardPoints Int @default(50)
-  uses        Int      @default(0)
-  createdAt   DateTime @default(now())
+  inviteeRewardPoints Int      @default(50)
+  uses                Int      @default(0)
+  createdAt           DateTime @default(now())
 
   claims ReferralClaim[]
 
@@ -670,14 +678,14 @@ model Referral {
 
 /// บันทึกการกินรหัส referral
 model ReferralClaim {
-  id          String   @id @default(cuid())
-  referralId  String
-  referral    Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
-  inviteeId   String
+  id         String    @id @default(cuid())
+  referralId String
+  referral   Referral  @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  inviteeId  String
   /// "PENDING" | "REWARDED" | "REVERSED"
-  status      String   @default("PENDING")
-  rewardedAt  DateTime?
-  createdAt   DateTime @default(now())
+  status     String    @default("PENDING")
+  rewardedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@unique([referralId, inviteeId])
   @@index([inviteeId])
@@ -712,14 +720,14 @@ model Campaign {
 
 /// สินค้าที่อยู่ใน flash deal / boost
 model CampaignProduct {
-  id          String   @id @default(cuid())
-  campaignId  String
-  productId   String
+  id              String   @id @default(cuid())
+  campaignId      String
+  productId       String
   /// override ราคา (cents) — null = ใช้ส่วนลดจาก campaign.value
   flashPriceCents Int?
-  stockCap    Int      @default(0)
-  sold        Int      @default(0)
-  createdAt   DateTime @default(now())
+  stockCap        Int      @default(0)
+  sold            Int      @default(0)
+  createdAt       DateTime @default(now())
 
   @@unique([campaignId, productId])
   @@index([productId])
@@ -728,25 +736,25 @@ model CampaignProduct {
 
 /// คลิปสั้น Short Video Feed (TikTok-like)
 model VideoPost {
-  id          String   @id @default(cuid())
-  authorId    String
+  id        String   @id @default(cuid())
+  authorId  String
   /// ผูกสินค้า (optional) — null = โพสต์ทั่วไป
-  productId   String?
-  shopId      String?
-  videoUrl    String
-  thumbUrl    String?
-  caption     String   @default("")
+  productId String?
+  shopId    String?
+  videoUrl  String
+  thumbUrl  String?
+  caption   String   @default("")
   /// JSON tags ["#food","#flash"]
-  tagsJson    String   @default("[]")
-  likes       Int      @default(0)
-  views       Int      @default(0)
-  comments    Int      @default(0)
+  tagsJson  String   @default("[]")
+  likes     Int      @default(0)
+  views     Int      @default(0)
+  comments  Int      @default(0)
   /// "ACTIVE" | "HIDDEN" | "DELETED"
-  status      String   @default("ACTIVE")
+  status    String   @default("ACTIVE")
   /// คะแนนความนิยม (สำหรับ feed ranking)
-  score       Float    @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  score     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   reactions VideoReaction[]
 
@@ -758,13 +766,13 @@ model VideoPost {
 
 /// like ของผู้ใช้ต่อคลิป (รองรับ unlike)
 model VideoReaction {
-  id          String   @id @default(cuid())
-  videoId     String
-  video       VideoPost @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  userId      String
+  id        String    @id @default(cuid())
+  videoId   String
+  video     VideoPost @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  userId    String
   /// "LIKE" | "DISLIKE"
-  kind        String   @default("LIKE")
-  createdAt   DateTime @default(now())
+  kind      String    @default("LIKE")
+  createdAt DateTime  @default(now())
 
   @@unique([videoId, userId])
   @@index([userId])
@@ -773,22 +781,22 @@ model VideoReaction {
 
 /// Broadcast — ส่งข้อความถึงลูกค้า (LINE OA / push / in-app)
 model Broadcast {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   shopId      String?
   /// "PUSH" | "INAPP" | "LINE" | "EMAIL"
-  channel     String   @default("INAPP")
+  channel     String    @default("INAPP")
   title       String
   body        String
   /// "ALL" | "BUYERS" | "ABANDONED_CART" | "WIN_BACK" | "VIP"
-  audience    String   @default("ALL")
+  audience    String    @default("ALL")
   /// "DRAFT" | "QUEUED" | "SENT" | "FAILED"
-  status      String   @default("DRAFT")
-  sentCount   Int      @default(0)
-  failedCount Int      @default(0)
+  status      String    @default("DRAFT")
+  sentCount   Int       @default(0)
+  failedCount Int       @default(0)
   scheduledAt DateTime?
   sentAt      DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([shopId, status])
   @@index([status, scheduledAt])
@@ -837,4 +845,88 @@ model LiveUpdateManifest {
   updatedAt        DateTime @default(now()) @updatedAt
 
   @@map("live_update_manifests")
+}
+
+// =============================================================================
+// Phase 19.5 — auth + payment tables previously created by SQLite-shaped
+// bootstrap migrations. Those migrations are gated behind SKIP_BOOTSTRAP_MIGRATIONS
+// (defaults to true on Postgres) so the tables would NEVER exist on Railway
+// otherwise. Adding them here so `prisma db push` provisions them at deploy.
+// =============================================================================
+
+/// Refresh-token rotation ledger. Issued at /auth/login + /auth/signup,
+/// rotated at /auth/refresh. We store sha256(plaintext) only — the
+/// plaintext is returned once to the client. `replacedById` lets us follow
+/// the rotation chain during grace-window double-rotations (mobile sends
+/// the same refresh twice if app crashes after server rotation but before
+/// client persists the new token — see auth.service.ts:120-141).
+model RefreshToken {
+  id           String    @id
+  userId       String
+  /// sha256 hex of the plaintext token. Never the plaintext.
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  /// "rotated" | "reuse" | "logout" | "deletion" — free-form audit tag
+  revokeReason String?
+  /// On rotation: id of the *new* token row this one was replaced by.
+  /// Used by followReplacement() during grace-window resubmits.
+  replacedById String?
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+/// Payment webhook event ledger — idempotency for PSP retries.
+/// PSPs (Omise, Stripe) re-deliver the same event id if our 2xx is delayed,
+/// network fails, or the event sat in their retry queue. The (provider,
+/// providerEventId) unique pair lets us no-op on dupes without double-
+/// crediting wallets. settledAt is filled by handleWebhookEvent() after
+/// the order.status transition succeeds; events older than the retention
+/// window may be purged but the dedup index must remain authoritative.
+model PaymentWebhookEvent {
+  id              String    @id
+  provider        String
+  providerEventId String
+  /// PSP-specific charge id / payment intent — used to look up the local
+  /// payments row at settlement time.
+  providerRef     String
+  /// "SUCCEEDED" | "FAILED" | "PENDING" — normalized across providers
+  status          String
+  amountCents     Int
+  receivedAt      DateTime  @default(now())
+  /// Filled when handleWebhookEvent() successfully transitions the order
+  /// to PAID. Null = received but order side-effects didn't run (e.g.
+  /// providerRef didn't match any payments row).
+  settledAt       DateTime?
+
+  @@unique([provider, providerEventId])
+  @@index([providerRef])
+  @@map("payment_webhook_events")
+}
+
+/// Phase 12.2 — video moderation reports. Mirrors `bootstrap-phase12-2.ts`
+/// which previously created this table via runtime SQL (SQLite-shaped, didn't
+/// run on Postgres). User-initiated reports flow: PENDING → admin reviews →
+/// RESOLVED with disposition ('KEEP' | 'HIDE' | 'DELETE').
+model VideoReport {
+  id          String    @id
+  videoId     String
+  reporterId  String
+  /// "SPAM" | "INAPPROPRIATE" | "MISINFO" | "OTHER" — enforced at zod boundary
+  reason      String
+  note        String?
+  /// "PENDING" | "RESOLVED"
+  status      String    @default("PENDING")
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  /// "KEEP" | "HIDE" | "DELETE"
+  resolution  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([videoId, createdAt])
+  @@index([status, createdAt])
+  @@map("video_reports")
 }

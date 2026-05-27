@@ -111,7 +111,8 @@ export class PaymentService {
         amountCents: order.totalCents,
         status: 'PENDING',
         qrCodePayload: charge.qrCodePayload,
-        ...({ provider: charge.provider, providerRef: charge.providerRef } as any),
+        provider: charge.provider,
+        providerRef: charge.providerRef,
       },
       create: {
         orderId: order.id,
@@ -119,7 +120,8 @@ export class PaymentService {
         amountCents: order.totalCents,
         status: 'PENDING',
         qrCodePayload: charge.qrCodePayload,
-        ...({ provider: charge.provider, providerRef: charge.providerRef } as any),
+        provider: charge.provider,
+        providerRef: charge.providerRef,
       },
     });
 
@@ -135,48 +137,49 @@ export class PaymentService {
    * Process a verified webhook event.
    * Idempotent: stores the event id in `payment_webhook_events`. If we've seen
    * this `(provider, eventId)` before, we no-op so retries don't double-credit.
+   *
+   * Phase 19.5 — ported from raw SQL ($queryRawUnsafe with SQLite `?` + `datetime('now')`)
+   * to the Prisma client so this works on Postgres (Railway prod).
    */
   async handleWebhookEvent(event: WebhookEvent): Promise<{ deduped: boolean; settled: boolean }> {
-    // Dedupe ledger insert. `INSERT OR IGNORE` would silently skip — we want
-    // to know whether the row was new, so do a manual check.
-    const existing = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, settledAt FROM payment_webhook_events
-       WHERE provider = ? AND providerEventId = ? LIMIT 1`,
-      event.provider,
-      event.eventId,
-    )) as Array<{ id: string; settledAt: string | null }>;
-    if (existing.length > 0) {
+    const existing = await this.prisma.paymentWebhookEvent.findUnique({
+      where: {
+        provider_providerEventId: { provider: event.provider, providerEventId: event.eventId },
+      },
+      select: { id: true, settledAt: true },
+    });
+    if (existing) {
       // We've already accepted this event id. If it had also settled the order
       // last time → fully deduped + settled; if not, return deduped + the same
       // settlement state. Either way, do NOT insert again or run side effects.
-      return { deduped: true, settled: !!existing[0].settledAt };
+      return { deduped: true, settled: !!existing.settledAt };
     }
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO payment_webhook_events
-        (id, provider, providerEventId, providerRef, status, amountCents, receivedAt)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
-      `pwh_${randomBytes(6).toString('hex')}`,
-      event.provider,
-      event.eventId,
-      event.providerRef,
-      event.status,
-      event.amountCents,
-    );
+
+    await this.prisma.paymentWebhookEvent.create({
+      data: {
+        id: `pwh_${randomBytes(6).toString('hex')}`,
+        provider: event.provider,
+        providerEventId: event.eventId,
+        providerRef: event.providerRef,
+        status: event.status,
+        amountCents: event.amountCents,
+      },
+    });
 
     // Look up the payments row via providerRef. Falls back to providerRef-less
     // mock flow (where the test client may pass orderId in providerRef).
-    let payment = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, orderId, status FROM payments WHERE providerRef = ? LIMIT 1`,
-      event.providerRef,
-    )) as Array<{ id: string; orderId: string; status: string }>;
-    if (payment.length === 0) {
+    let target = await this.prisma.payment.findFirst({
+      where: { providerRef: event.providerRef },
+      select: { id: true, orderId: true, status: true },
+    });
+    if (!target) {
       // Backward-compat with mock confirm where providerRef == orderId
-      payment = (await this.prisma.$queryRawUnsafe(
-        `SELECT id, orderId, status FROM payments WHERE orderId = ? LIMIT 1`,
-        event.providerRef,
-      )) as Array<{ id: string; orderId: string; status: string }>;
+      target = await this.prisma.payment.findFirst({
+        where: { orderId: event.providerRef },
+        select: { id: true, orderId: true, status: true },
+      });
     }
-    const target = payment[0];
+
     if (!target) {
       this.logger.warn(
         `webhook ${event.provider}/${event.eventId} ignored — no payment row for ref ${event.providerRef}`,
@@ -186,19 +189,19 @@ export class PaymentService {
 
     if (event.status === 'SUCCEEDED' && target.status !== 'SUCCEEDED') {
       await this.settle(target.orderId);
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE payment_webhook_events SET settledAt = datetime('now') WHERE provider = ? AND providerEventId = ?`,
-        event.provider,
-        event.eventId,
-      );
+      await this.prisma.paymentWebhookEvent.update({
+        where: {
+          provider_providerEventId: { provider: event.provider, providerEventId: event.eventId },
+        },
+        data: { settledAt: new Date() },
+      });
       return { deduped: false, settled: true };
     }
     if (event.status === 'FAILED' && target.status === 'PENDING') {
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE payments SET status='FAILED', failureMessage=? WHERE id=?`,
-        event.failureMessage ?? null,
-        target.id,
-      );
+      await this.prisma.payment.update({
+        where: { id: target.id },
+        data: { status: 'FAILED', failureMessage: event.failureMessage ?? null },
+      });
     }
     return { deduped: false, settled: false };
   }

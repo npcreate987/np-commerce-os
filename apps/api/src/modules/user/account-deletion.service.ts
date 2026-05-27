@@ -91,16 +91,13 @@ export class AccountDeletionService implements OnApplicationBootstrap {
     });
 
     // Best-effort: revoke active refresh tokens so other devices log
-    // out immediately. The raw query mirrors the existing pattern in
-    // auth.service.ts (sqlite-friendly).
+    // out immediately. Phase 19.5 — ported from raw SQL ($queryRawUnsafe
+    // with SQLite `?` + `datetime('now')`) to Prisma client (DB-agnostic).
     try {
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE refresh_tokens
-         SET revokedAt = datetime('now'),
-             revokeReason = 'account_deletion_requested'
-         WHERE userId = ? AND revokedAt IS NULL`,
-        userId,
-      );
+      await this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokeReason: 'account_deletion_requested' },
+      });
     } catch (err) {
       // refresh_tokens table may not exist in test runs; the absence
       // shouldn't block the delete flow itself.

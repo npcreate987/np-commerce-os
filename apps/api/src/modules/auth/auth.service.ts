@@ -94,27 +94,13 @@ export class AuthService {
   async refreshAccessToken(presentedToken: string): Promise<AuthResponse> {
     const tokenHash = sha256Hex(presentedToken);
 
-    type RefreshRow = {
-      id: string;
-      userId: string;
-      tokenHash: string;
-      expiresAt: string;
-      revokedAt: string | null;
-      replacedById: string | null;
-    };
-
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, userId, tokenHash, expiresAt, revokedAt, replacedById
-       FROM refresh_tokens
-       WHERE tokenHash = ? LIMIT 1`,
-      tokenHash,
-    )) as RefreshRow[];
-
-    const row = rows[0];
+    const row = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+    });
     if (!row) throw new UnauthorizedException('refresh token invalid');
 
     const now = Date.now();
-    if (new Date(row.expiresAt).getTime() < now) {
+    if (row.expiresAt.getTime() < now) {
       throw new UnauthorizedException('refresh token expired');
     }
 
@@ -122,18 +108,17 @@ export class AuthService {
     // already rotated it. Honour the successor instead of failing — but only
     // inside `REFRESH_ROTATION_GRACE_SEC` of the revocation.
     if (row.revokedAt && row.replacedById) {
-      const revokedAt = new Date(row.revokedAt).getTime();
+      const revokedAt = row.revokedAt.getTime();
       if (now - revokedAt < REFRESH_ROTATION_GRACE_SEC * 1000) {
         return this.followReplacement(row.userId, row.replacedById);
       }
       // Past the grace window — this is either a stale client or, more
       // worryingly, token theft. Revoke ALL sessions for this user as a
       // precaution and force re-login.
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE refresh_tokens SET revokedAt = datetime('now'), revokeReason = 'reuse'
-         WHERE userId = ? AND revokedAt IS NULL`,
-        row.userId,
-      );
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: row.userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokeReason: 'reuse' },
+      });
       this.logger.warn(
         `refresh token reuse detected for user=${row.userId} — revoked all sessions`,
       );
@@ -149,13 +134,10 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('user not found');
 
     const next = await this.issueRefreshToken(row.userId);
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE refresh_tokens
-       SET revokedAt = datetime('now'), revokeReason = 'rotated', replacedById = ?
-       WHERE id = ?`,
-      next.id,
-      row.id,
-    );
+    await this.prisma.refreshToken.update({
+      where: { id: row.id },
+      data: { revokedAt: new Date(), revokeReason: 'rotated', replacedById: next.id },
+    });
     return this.toAuthResponse(user, next);
   }
 
@@ -204,14 +186,9 @@ export class AuthService {
     const tokenHash = sha256Hex(plaintext);
     const id = `rt_${Date.now().toString(36)}${randomBytes(4).toString('hex')}`;
     const expiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 86400_000);
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO refresh_tokens (id, userId, tokenHash, expiresAt, createdAt)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
-      id,
-      userId,
-      tokenHash,
-      expiresAt.toISOString(),
-    );
+    await this.prisma.refreshToken.create({
+      data: { id, userId, tokenHash, expiresAt },
+    });
     return { id, plaintext, expiresAt };
   }
 
