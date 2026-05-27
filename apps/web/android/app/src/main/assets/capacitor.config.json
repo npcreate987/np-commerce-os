@@ -60,7 +60,10 @@
 			"autoDeleteFailed": true,
 			"autoDeletePrevious": true,
 			"resetWhenUpdate": false,
-			"directUpdate": false
+			"directUpdate": false,
+			"updateUrl": "",
+			"channelUrl": "",
+			"statsUrl": ""
 		}
 	}
 }

@@ -15,15 +15,15 @@ export async function logModelRun(
   opts: { status?: 'OK' | 'FAIL'; note?: string } = {},
 ): Promise<void> {
   try {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO model_runs (id, kind, status, durationMs, note, createdAt)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      newId('run'),
-      kind,
-      opts.status ?? 'OK',
-      Math.max(0, Math.round(durationMs)),
-      opts.note ?? null,
-    );
+    await prisma.modelRun.create({
+      data: {
+        id: newId('run'),
+        kind,
+        status: opts.status ?? 'OK',
+        durationMs: Math.max(0, Math.round(durationMs)),
+        note: opts.note ?? null,
+      },
+    });
   } catch {
     // swallow: telemetry should never break the request
   }

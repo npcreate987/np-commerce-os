@@ -225,107 +225,112 @@ export class FeedService {
   // what's happening and don't get a silent moderation experience.
   // =============================================================================
 
+  /** Phase 19.5 — ported from raw SQL (SQLite `?` + `LIMIT ?`) to Prisma client. */
   async listMine(
     userId: string,
     limit: number = 50,
   ): Promise<VideoFeedItem[]> {
     const lim = Math.min(Math.max(limit, 1), 100);
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT v.*,
-              u.name AS authorName,
-              p.name AS productName,
-              p.priceCents AS productPriceCents,
-              s.name AS shopName,
-              NULL AS liked
-       FROM video_posts v
-       LEFT JOIN users u ON u.id = v.authorId
-       LEFT JOIN products p ON p.id = v.productId
-       LEFT JOIN shops s ON s.id = v.shopId
-       WHERE v.authorId = ? AND v.status != 'DELETED'
-       ORDER BY v.createdAt DESC
-       LIMIT ?`,
-      userId,
-      lim,
-    )) as DbFeedRow[];
-    return rows.map(toFeedItem);
+    const videos = await this.prisma.videoPost.findMany({
+      where: { authorId: userId, status: { not: 'DELETED' } },
+      orderBy: { createdAt: 'desc' },
+      take: lim,
+    });
+    // listMine is the author's own dashboard — there's no "liked by me"
+    // notion for your own video, so we don't pass userId to hydrateFeed.
+    return this.hydrateFeed(videos, null);
   }
 
   // =============================================================================
   // Writes — create / like / view / author-remove
   // =============================================================================
 
+  /** Phase 19.5 — Prisma client. The old raw INSERT + SELECT round-trip is
+   *  replaced by a single `create()` which returns the inserted row. */
   async create(userId: string, input: CreateVideoInput): Promise<VideoPost> {
-    const id = newId('vid');
-    const tagsJson = JSON.stringify(input.tags ?? []);
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO video_posts
-        (id, authorId, productId, shopId, videoUrl, thumbUrl, caption, tagsJson,
-         likes, views, comments, status, score, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 'ACTIVE', 0,
-               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      id,
-      userId,
-      input.productId ?? null,
-      input.shopId ?? null,
-      input.videoUrl,
-      input.thumbUrl ?? null,
-      input.caption,
-      tagsJson,
-    );
-    const created = (await this.prisma.$queryRawUnsafe(
-      `SELECT * FROM video_posts WHERE id = ?`,
-      id,
-    )) as DbVideo[];
-    return toVideoPost(created[0]);
+    const created = await this.prisma.videoPost.create({
+      data: {
+        id: newId('vid'),
+        authorId: userId,
+        productId: input.productId ?? null,
+        shopId: input.shopId ?? null,
+        videoUrl: input.videoUrl,
+        thumbUrl: input.thumbUrl ?? null,
+        caption: input.caption,
+        tagsJson: JSON.stringify(input.tags ?? []),
+        likes: 0,
+        views: 0,
+        comments: 0,
+        status: 'ACTIVE',
+        score: 0,
+      },
+    });
+    return toVideoPost({
+      ...created,
+      createdAt:
+        created.createdAt instanceof Date
+          ? created.createdAt.toISOString()
+          : created.createdAt,
+      updatedAt:
+        created.updatedAt instanceof Date
+          ? created.updatedAt.toISOString()
+          : created.updatedAt,
+    });
   }
 
+  /** Phase 19.5 — Prisma client with atomic increment/decrement. */
   async like(userId: string, videoId: string): Promise<{ liked: boolean; likes: number }> {
-    const video = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, likes FROM video_posts WHERE id = ? AND status = 'ACTIVE'`,
-      videoId,
-    )) as Array<{ id: string; likes: number }>;
-    if (video.length === 0) throw new NotFoundException('ไม่พบคลิป');
+    const video = await this.prisma.videoPost.findFirst({
+      where: { id: videoId, status: 'ACTIVE' },
+      select: { id: true, likes: true },
+    });
+    if (!video) throw new NotFoundException('ไม่พบคลิป');
 
-    const existing = (await this.prisma.$queryRawUnsafe(
-      `SELECT id FROM video_reactions WHERE videoId = ? AND userId = ?`,
-      videoId,
-      userId,
-    )) as Array<{ id: string }>;
+    const existing = await this.prisma.videoReaction.findFirst({
+      where: { videoId, userId },
+      select: { id: true },
+    });
 
-    if (existing.length > 0) {
-      await this.prisma.$executeRawUnsafe(
-        `DELETE FROM video_reactions WHERE id = ?`,
-        existing[0].id,
-      );
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE video_posts SET likes = MAX(0, likes - 1), score = score - 1,
-         updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
-        videoId,
-      );
-      return { liked: false, likes: Math.max(0, video[0].likes - 1) };
+    if (existing) {
+      await this.prisma.videoReaction.delete({ where: { id: existing.id } });
+      const updated = await this.prisma.videoPost.update({
+        where: { id: videoId },
+        data: {
+          // Prisma doesn't have a native MAX(0, ...) — clamp ourselves so we
+          // never store a negative likes counter even if the row drifted.
+          likes: Math.max(0, video.likes - 1),
+          score: { decrement: 1 },
+        },
+        select: { likes: true },
+      });
+      return { liked: false, likes: updated.likes };
     }
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO video_reactions (id, videoId, userId, kind, createdAt)
-       VALUES (?, ?, ?, 'LIKE', CURRENT_TIMESTAMP)`,
-      newId('vre'),
-      videoId,
-      userId,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE video_posts SET likes = likes + 1, score = score + 1,
-       updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
-      videoId,
-    );
-    return { liked: true, likes: video[0].likes + 1 };
+    await this.prisma.videoReaction.create({
+      data: {
+        id: newId('vre'),
+        videoId,
+        userId,
+        kind: 'LIKE',
+      },
+    });
+    const updated = await this.prisma.videoPost.update({
+      where: { id: videoId },
+      data: { likes: { increment: 1 }, score: { increment: 1 } },
+      select: { likes: true },
+    });
+    return { liked: true, likes: updated.likes };
   }
 
+  /** Phase 19.5 — Prisma client with atomic increment. `updateMany` so a
+   *  view on a DELETED/HIDDEN video is a no-op instead of throwing. */
   async view(videoId: string): Promise<{ ok: true }> {
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE video_posts
-       SET views = views + 1, score = score + 0.1, updatedAt = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'ACTIVE'`,
-      videoId,
-    );
+    await this.prisma.videoPost.updateMany({
+      where: { id: videoId, status: 'ACTIVE' },
+      data: {
+        views: { increment: 1 },
+        score: { increment: 0.1 },
+      },
+    });
     return { ok: true };
   }
 
@@ -338,21 +343,19 @@ export class FeedService {
    * swept by a future janitor cron.
    */
   async remove(userId: string, videoId: string): Promise<{ ok: true }> {
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT authorId, videoUrl, thumbUrl FROM video_posts WHERE id = ?`,
-      videoId,
-    )) as Array<{ authorId: string; videoUrl: string; thumbUrl: string | null }>;
-    if (rows.length === 0) throw new NotFoundException('ไม่พบคลิป');
-    if (rows[0].authorId !== userId) {
+    const row = await this.prisma.videoPost.findUnique({
+      where: { id: videoId },
+      select: { authorId: true, videoUrl: true, thumbUrl: true },
+    });
+    if (!row) throw new NotFoundException('ไม่พบคลิป');
+    if (row.authorId !== userId) {
       throw new BadRequestException('ลบได้เฉพาะคลิปของตัวเอง');
     }
-    // Phase 19.5 — Prisma client (DB-agnostic) instead of raw SQL with SQLite
-    // `?` placeholders + `datetime('now')`.
     await this.prisma.videoPost.update({
       where: { id: videoId },
       data: { status: 'DELETED' },
     });
-    await this.cleanupBucketObjects(rows[0].videoUrl, rows[0].thumbUrl);
+    await this.cleanupBucketObjects(row.videoUrl, row.thumbUrl);
     // Author removes their own video → auto-resolve any open reports against
     // it ("DELETE" disposition) so it disappears from the admin queue cleanly.
     await this.prisma.videoReport.updateMany({
@@ -383,41 +386,43 @@ export class FeedService {
     videoId: string,
     input: ReportVideoInput,
   ): Promise<{ ok: true; pendingReports: number }> {
-    const v = (await this.prisma.$queryRawUnsafe(
-      `SELECT authorId, status FROM video_posts WHERE id = ?`,
-      videoId,
-    )) as Array<{ authorId: string; status: string }>;
-    if (v.length === 0) throw new NotFoundException('ไม่พบคลิป');
-    if (v[0].authorId === reporterId) {
+    const v = await this.prisma.videoPost.findUnique({
+      where: { id: videoId },
+      select: { authorId: true, status: true },
+    });
+    if (!v) throw new NotFoundException('ไม่พบคลิป');
+    if (v.authorId === reporterId) {
       throw new BadRequestException('รายงานคลิปของตัวเองไม่ได้');
     }
 
-    // Duplicate-report guard (UNIQUE WHERE status='PENDING' enforces this at
-    // the DB level too; we catch the constraint violation as a friendly 409).
-    const dupe = (await this.prisma.$queryRawUnsafe(
-      `SELECT id FROM video_reports
-       WHERE videoId=? AND reporterId=? AND status='PENDING' LIMIT 1`,
-      videoId,
-      reporterId,
-    )) as Array<{ id: string }>;
-    if (dupe.length > 0) {
+    // Duplicate-report guard. We rely on Prisma's P2002 unique-violation as
+    // the source-of-truth for the race; the pre-check just shortens the
+    // happy-path error message.
+    const dupe = await this.prisma.videoReport.findFirst({
+      where: { videoId, reporterId, status: 'PENDING' },
+      select: { id: true },
+    });
+    if (dupe) {
       throw new ConflictException('คุณรายงานคลิปนี้ไปแล้ว');
     }
 
     try {
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO video_reports
-          (id, videoId, reporterId, reason, note, status, createdAt)
-         VALUES (?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP)`,
-        newId('vrep'),
-        videoId,
-        reporterId,
-        input.reason,
-        input.note?.trim() || null,
-      );
+      await this.prisma.videoReport.create({
+        data: {
+          id: newId('vrep'),
+          videoId,
+          reporterId,
+          reason: input.reason,
+          note: input.note?.trim() || null,
+          status: 'PENDING',
+        },
+      });
     } catch (e) {
-      // The UNIQUE-WHERE index can still trip if the SELECT above raced.
-      if (String((e as Error).message).includes('UNIQUE')) {
+      const msg = String((e as Error).message);
+      // Prisma's Postgres adapter surfaces unique violations as code P2002
+      // (and includes the word "Unique" in the message), while raw SQLite
+      // surfaced "UNIQUE constraint failed". Catch both shapes.
+      if (msg.includes('Unique') || msg.includes('UNIQUE') || msg.includes('P2002')) {
         throw new ConflictException('คุณรายงานคลิปนี้ไปแล้ว');
       }
       throw e;
@@ -425,18 +430,17 @@ export class FeedService {
 
     // Promote ACTIVE → REPORTED. We deliberately don't touch HIDDEN/DELETED
     // because those states are already terminal for the user-facing feed.
-    if (v[0].status === 'ACTIVE') {
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE video_posts SET status='REPORTED', updatedAt=CURRENT_TIMESTAMP WHERE id=?`,
-        videoId,
-      );
+    if (v.status === 'ACTIVE') {
+      await this.prisma.videoPost.update({
+        where: { id: videoId },
+        data: { status: 'REPORTED' },
+      });
     }
 
-    const count = (await this.prisma.$queryRawUnsafe(
-      `SELECT COUNT(*) AS n FROM video_reports WHERE videoId=? AND status='PENDING'`,
-      videoId,
-    )) as Array<{ n: number | bigint }>;
-    return { ok: true, pendingReports: Number(count[0].n) };
+    const pendingReports = await this.prisma.videoReport.count({
+      where: { videoId, status: 'PENDING' },
+    });
+    return { ok: true, pendingReports };
   }
 
   // =============================================================================

@@ -930,3 +930,40 @@ model VideoReport {
   @@index([status, createdAt])
   @@map("video_reports")
 }
+
+/// Phase 6 — event log used by recommendation popularity signal +
+/// admin "what's hot" panel. Previously created by `bootstrap-phase6.ts`
+/// in SQLite-shape; missing on Postgres until now.
+///
+/// userId is nullable on purpose: anonymous web/mobile visitors generate
+/// the bulk of the impressions and we still want them in the popularity
+/// counter — they just don't contribute to personalization.
+model ProductView {
+  id        String   @id
+  productId String
+  userId    String?
+  /// Free-form attribution: "feed" | "search" | "deep-link" | "share" | etc.
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([userId, createdAt])
+  @@map("product_views")
+}
+
+/// Phase 6 — visibility / latency log for AI / ML "model runs" (recommendation
+/// pipeline, ranker, retrieval, etc.). Writes via `logModelRun` swallow errors
+/// so logging never breaks a request, but the table still needs to exist for
+/// the admin dashboard to read trend data.
+model ModelRun {
+  id         String   @id
+  kind       String
+  /// "OK" | "FAIL"
+  status     String   @default("OK")
+  durationMs Int      @default(0)
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([kind, createdAt])
+  @@map("model_runs")
+}

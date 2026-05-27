@@ -68,45 +68,48 @@ export class RecommendationService {
   ): Promise<ProductRecommendation[]> {
     const safeLimit = Math.max(1, Math.min(limit, 50));
 
-    // popularity score (orders in last 30 days) — order_items has no createdAt,
-    // so we join orders for the time filter
-    const popular = (await this.prisma.$queryRawUnsafe(
-      `SELECT p.id, p.shopId, p.name, p.priceCents, s.name AS shopName,
-              COALESCE(SUM(oi.quantity), 0) AS units
-       FROM products p
-       LEFT JOIN order_items oi ON oi.productId = p.id
-       LEFT JOIN orders o ON o.id = oi.orderId
-         AND o.status NOT IN ('CANCELLED')
-         AND o.createdAt >= date('now', '-30 days')
-       LEFT JOIN shops s ON s.id = p.shopId
-       WHERE p.status = 'ACTIVE'
-       GROUP BY p.id
-       ORDER BY units DESC, p.createdAt DESC
-       LIMIT ?`,
-      safeLimit * 4,
-    )) as Array<{
+    // Phase 19.5 — popularity score (orders in last 30 days).
+    // Pre-compute cutoff as a JS Date so $queryRaw binds it via Prisma (DB-agnostic).
+    const cutoff30 = new Date(Date.now() - 30 * 86400_000);
+    type PopRow = {
       id: string;
       shopId: string;
       name: string;
       priceCents: number;
       shopName: string | null;
-      units: number;
-    }>;
+      units: number | bigint;
+    };
+    const popularRaw = (await this.prisma.$queryRaw<PopRow[]>`
+      SELECT p.id, p."shopId", p.name, p."priceCents", s.name AS "shopName",
+             COALESCE(SUM(oi.quantity), 0) AS units
+      FROM products p
+      LEFT JOIN order_items oi ON oi."productId" = p.id
+      LEFT JOIN orders o ON o.id = oi."orderId"
+        AND o.status NOT IN ('CANCELLED')
+        AND o."createdAt" >= ${cutoff30}
+      LEFT JOIN shops s ON s.id = p."shopId"
+      WHERE p.status = 'ACTIVE'
+      GROUP BY p.id, s.name
+      ORDER BY units DESC, p."createdAt" DESC
+      LIMIT ${safeLimit * 4}
+    `);
+    const popular = popularRaw.map((r) => ({ ...r, units: Number(r.units) }));
 
     let ownedShopIds = new Set<string>();
     let ownedProductIds = new Set<string>();
     if (userId) {
-      const userHistory = (await this.prisma.$queryRawUnsafe(
-        `SELECT DISTINCT p.id AS productId, p.shopId
-         FROM orders o
-         JOIN order_items oi ON oi.orderId = o.id
-         JOIN products p ON p.id = oi.productId
-         WHERE o.customerId = ?
-         LIMIT 100`,
-        userId,
-      )) as Array<{ productId: string; shopId: string }>;
-      ownedProductIds = new Set(userHistory.map((r) => r.productId));
-      ownedShopIds = new Set(userHistory.map((r) => r.shopId));
+      // Cheap join via Prisma client — gets distinct (productId, shopId)
+      // for everything this user has bought. We cap at 100 distinct items.
+      const history = await this.prisma.orderItem.findMany({
+        where: { order: { customerId: userId } },
+        select: { product: { select: { id: true, shopId: true } } },
+        take: 100,
+      });
+      for (const h of history) {
+        if (!h.product) continue;
+        ownedProductIds.add(h.product.id);
+        ownedShopIds.add(h.product.shopId);
+      }
     }
 
     const maxUnits = Math.max(...popular.map((p) => p.units), 1);
@@ -158,37 +161,54 @@ export class RecommendationService {
     limit = 8,
   ): Promise<ProductRecommendation[]> {
     const safeLimit = Math.max(1, Math.min(limit, 20));
-    const seedRows = (await this.prisma.$queryRawUnsafe(
-      `SELECT id, shopId, name, description, priceCents, status, createdAt
-       FROM products WHERE id = ? LIMIT 1`,
-      productId,
-    )) as DbProductRow[];
-    if (seedRows.length === 0) return [];
-    const seed = seedRows[0];
+    const seedRow = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true,
+        shopId: true,
+        name: true,
+        description: true,
+        priceCents: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+    if (!seedRow) return [];
+    const seed: DbProductRow = {
+      ...seedRow,
+      createdAt:
+        seedRow.createdAt instanceof Date
+          ? seedRow.createdAt.toISOString()
+          : seedRow.createdAt,
+    };
 
     // Pull a wide candidate set: all active products of the platform.
     // For larger corpora switch to pgvector / pre-built ANN index.
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT p.id, p.shopId, p.name, p.description, p.priceCents,
-              s.name AS shopName,
-              COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS units
-       FROM products p
-       LEFT JOIN order_items oi ON oi.productId = p.id
-       LEFT JOIN orders o ON o.id = oi.orderId
-         AND o.status NOT IN ('CANCELLED')
-         AND o.createdAt >= date('now', '-30 days')
-       LEFT JOIN shops s ON s.id = p.shopId
-       WHERE p.status = 'ACTIVE'
-       GROUP BY p.id`,
-    )) as Array<{
+    // Phase 19.5 — pre-computed cutoff binds via $queryRaw template literal.
+    const cutoff30 = new Date(Date.now() - 30 * 86400_000);
+    type SimilarRow = {
       id: string;
       shopId: string;
       name: string;
       description: string | null;
       priceCents: number;
       shopName: string | null;
-      units: number;
-    }>;
+      units: number | bigint;
+    };
+    const rawRows = (await this.prisma.$queryRaw<SimilarRow[]>`
+      SELECT p.id, p."shopId", p.name, p.description, p."priceCents",
+             s.name AS "shopName",
+             COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS units
+      FROM products p
+      LEFT JOIN order_items oi ON oi."productId" = p.id
+      LEFT JOIN orders o ON o.id = oi."orderId"
+        AND o.status NOT IN ('CANCELLED')
+        AND o."createdAt" >= ${cutoff30}
+      LEFT JOIN shops s ON s.id = p."shopId"
+      WHERE p.status = 'ACTIVE'
+      GROUP BY p.id, s.name
+    `);
+    const rows = rawRows.map((r) => ({ ...r, units: Number(r.units) }));
 
     if (rows.length <= 1) return [];
 
@@ -362,26 +382,36 @@ export class RecommendationService {
     limit = 12,
   ): Promise<BuyAgainItem[]> {
     const safeLimit = Math.max(1, Math.min(limit, 50));
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT p.id AS productId,
-              p.name,
-              p.priceCents,
-              p.shopId,
-              s.name AS shopName,
-              MAX(o.createdAt) AS lastOrderedAt,
-              COUNT(DISTINCT o.id) AS timesBought
-       FROM orders o
-       JOIN order_items oi ON oi.orderId = o.id
-       JOIN products p ON p.id = oi.productId
-       LEFT JOIN shops s ON s.id = p.shopId
-       WHERE o.customerId = ?
-         AND p.status = 'ACTIVE'
-       GROUP BY p.id
-       ORDER BY lastOrderedAt DESC, timesBought DESC
-       LIMIT ?`,
-      userId,
-      safeLimit,
-    )) as DbBuyAgainRow[];
+    // Phase 19.5 — $queryRaw with bound params + camelCase columns quoted
+    // (Postgres folds unquoted identifiers to lowercase, which breaks
+    // `o.createdAt`, `oi.orderId`, etc.).
+    type BuyAgainRaw = {
+      productId: string;
+      name: string;
+      priceCents: number;
+      shopId: string;
+      shopName: string | null;
+      lastOrderedAt: Date | string;
+      timesBought: number | bigint;
+    };
+    const rows = (await this.prisma.$queryRaw<BuyAgainRaw[]>`
+      SELECT p.id AS "productId",
+             p.name,
+             p."priceCents",
+             p."shopId",
+             s.name AS "shopName",
+             MAX(o."createdAt") AS "lastOrderedAt",
+             COUNT(DISTINCT o.id) AS "timesBought"
+      FROM orders o
+      JOIN order_items oi ON oi."orderId" = o.id
+      JOIN products p ON p.id = oi."productId"
+      LEFT JOIN shops s ON s.id = p."shopId"
+      WHERE o."customerId" = ${userId}
+        AND p.status = 'ACTIVE'
+      GROUP BY p.id, s.name
+      ORDER BY "lastOrderedAt" DESC, "timesBought" DESC
+      LIMIT ${safeLimit}
+    `);
 
     return rows.map((r) => ({
       productId: r.productId,
@@ -390,8 +420,11 @@ export class RecommendationService {
       thumbUrl: null,
       shopId: r.shopId,
       shopName: r.shopName,
-      lastOrderedAt: r.lastOrderedAt,
-      timesBought: r.timesBought,
+      lastOrderedAt:
+        r.lastOrderedAt instanceof Date
+          ? r.lastOrderedAt.toISOString()
+          : r.lastOrderedAt,
+      timesBought: Number(r.timesBought),
     }));
   }
 
@@ -490,28 +523,32 @@ export class RecommendationService {
     profile: import('../../shared/types').UserTasteProfile,
     limit: number,
   ): Promise<Array<{ rec: ProductRecommendation; breakdown: RecommendationBreakdown }>> {
+    // Phase 19.5 — ported from raw $queryRawUnsafe.
     // ── 1. Candidate pool: ACTIVE products + 30d units for popularity score
-    const candRows = (await this.prisma.$queryRawUnsafe(
-      `SELECT p.id, p.shopId, p.name, p.description, p.priceCents,
-              s.name AS shopName,
-              COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS units
-       FROM products p
-       LEFT JOIN order_items oi ON oi.productId = p.id
-       LEFT JOIN orders o ON o.id = oi.orderId
-         AND o.status NOT IN ('CANCELLED')
-         AND o.createdAt >= date('now','-30 days')
-       LEFT JOIN shops s ON s.id = p.shopId
-       WHERE p.status = 'ACTIVE'
-       GROUP BY p.id`,
-    )) as Array<{
+    const cutoff30 = new Date(Date.now() - 30 * 86400_000);
+    type CandRaw = {
       id: string;
       shopId: string;
       name: string;
       description: string | null;
       priceCents: number;
       shopName: string | null;
-      units: number;
-    }>;
+      units: number | bigint;
+    };
+    const candRowsRaw = (await this.prisma.$queryRaw<CandRaw[]>`
+      SELECT p.id, p."shopId", p.name, p.description, p."priceCents",
+             s.name AS "shopName",
+             COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS units
+      FROM products p
+      LEFT JOIN order_items oi ON oi."productId" = p.id
+      LEFT JOIN orders o ON o.id = oi."orderId"
+        AND o.status NOT IN ('CANCELLED')
+        AND o."createdAt" >= ${cutoff30}
+      LEFT JOIN shops s ON s.id = p."shopId"
+      WHERE p.status = 'ACTIVE'
+      GROUP BY p.id, s.name
+    `);
+    const candRows = candRowsRaw.map((r) => ({ ...r, units: Number(r.units) }));
     if (candRows.length === 0) return [];
 
     // Exclude items the user already bought (don't recommend the same toaster
@@ -522,11 +559,10 @@ export class RecommendationService {
     // ── 2. Build TF-IDF over candidates + recent items (extend corpus so the
     //      user's history is in the same vector space).
     const recentRows = profile.recentItemIds.length
-      ? ((await this.prisma.$queryRawUnsafe(
-          `SELECT id, name, description FROM products
-           WHERE id IN (${profile.recentItemIds.map(() => '?').join(',')})`,
-          ...profile.recentItemIds,
-        )) as Array<{ id: string; name: string; description: string | null }>)
+      ? await this.prisma.product.findMany({
+          where: { id: { in: profile.recentItemIds } },
+          select: { id: true, name: true, description: true },
+        })
       : [];
 
     const corpus = [
@@ -689,14 +725,14 @@ export class RecommendationService {
     source?: string,
   ): Promise<void> {
     const t0 = Date.now();
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO product_views (id, productId, userId, source, createdAt)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      newId('view'),
-      productId,
-      userId,
-      source ?? null,
-    );
+    await this.prisma.productView.create({
+      data: {
+        id: newId('view'),
+        productId,
+        userId,
+        source: source ?? null,
+      },
+    });
     void logModelRun(this.prisma, 'reco.track-view', Date.now() - t0);
   }
 }
