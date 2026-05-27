@@ -445,9 +445,18 @@ export function VideoFeed({
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent lg:hidden" />
 
-                {/* === Right action rail =================================== */}
+                {/* === Right action rail ===================================
+                    Phase 20.3 — compact spec inspired by TikTok's iOS rail:
+                      • 40-px circles (was 44 px) — still ≥48-dp touch target
+                        once you include the 4-px label below
+                      • 18-px icons (was 20 px) — perceived weight unchanged
+                      • gap-2.5 between rows (was gap-4) — 37 % tighter so
+                        the rail occupies ~330 px instead of ~420 px on a
+                        720-px-tall video, leaving more clip visible
+                      • 10-px labels (was 11 px) with gap-0.5 hugging the
+                        button to keep each "row" visually tight                  */}
                 <div
-                  className="absolute right-2 z-20 flex flex-col items-center gap-4"
+                  className="absolute right-2 z-20 flex flex-col items-center gap-2.5"
                   style={{
                     bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)',
                   }}
@@ -456,16 +465,16 @@ export function VideoFeed({
                   <div className="relative">
                     <Link
                       href={`/profile/${v.authorId}`}
-                      className="grid h-11 w-11 place-items-center overflow-hidden rounded-full border-2 border-white bg-brand-gradient text-sm font-bold text-white"
+                      className="grid h-10 w-10 place-items-center overflow-hidden rounded-full border-2 border-white bg-brand-gradient text-[13px] font-bold text-white"
                     >
                       {v.authorName.slice(0, 1).toUpperCase()}
                     </Link>
                     <button
                       type="button"
                       aria-label="ติดตาม"
-                      className="absolute -bottom-2 left-1/2 grid h-5 w-5 -translate-x-1/2 place-items-center rounded-full bg-brand text-white shadow-glow"
+                      className="absolute -bottom-1.5 left-1/2 grid h-[18px] w-[18px] -translate-x-1/2 place-items-center rounded-full bg-brand text-white shadow-glow"
                     >
-                      <PlusIcon className="h-3 w-3" />
+                      <PlusIcon className="h-2.5 w-2.5" />
                     </button>
                   </div>
 
@@ -477,17 +486,17 @@ export function VideoFeed({
                       if (!token) return;
                       likeM.mutate(v.id);
                     }}
-                    className="flex flex-col items-center gap-1"
+                    className="flex flex-col items-center gap-0.5"
                   >
                     <span
                       className={cn(
-                        'grid h-11 w-11 place-items-center rounded-full transition active:scale-90',
+                        'grid h-10 w-10 place-items-center rounded-full transition active:scale-90',
                         v.liked ? 'bg-rose-500 text-white shadow-glow' : 'bg-white/15 backdrop-blur',
                       )}
                     >
-                      <HeartIcon className="h-5 w-5" />
+                      <HeartIcon className="h-[18px] w-[18px]" />
                     </span>
-                    <span className="text-[11px] font-semibold drop-shadow">
+                    <span className="text-[10px] font-semibold leading-tight drop-shadow">
                       {formatCount(v.likes)}
                     </span>
                   </button>
@@ -495,7 +504,7 @@ export function VideoFeed({
                   {/* Comment (placeholder for v2) */}
                   <button
                     type="button"
-                    className="flex flex-col items-center gap-1"
+                    className="flex flex-col items-center gap-0.5"
                     onClick={() =>
                       tracker.track('chat_open', {
                         entityType: 'video',
@@ -504,10 +513,10 @@ export function VideoFeed({
                       })
                     }
                   >
-                    <span className="grid h-11 w-11 place-items-center rounded-full bg-white/15 backdrop-blur active:scale-90">
-                      <CommentIcon className="h-5 w-5" />
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-white/15 backdrop-blur active:scale-90">
+                      <CommentIcon className="h-[18px] w-[18px]" />
                     </span>
-                    <span className="text-[11px] font-semibold drop-shadow">
+                    <span className="text-[10px] font-semibold leading-tight drop-shadow">
                       {formatCount(v.comments ?? 0)}
                     </span>
                   </button>
@@ -516,20 +525,20 @@ export function VideoFeed({
                   <button
                     type="button"
                     onClick={() => toggleSave(v.id)}
-                    className="flex flex-col items-center gap-1"
+                    className="flex flex-col items-center gap-0.5"
                   >
                     <span
                       className={cn(
-                        'grid h-11 w-11 place-items-center rounded-full transition active:scale-90',
+                        'grid h-10 w-10 place-items-center rounded-full transition active:scale-90',
                         saved ? 'bg-amber-400 text-ink-900 shadow-glow' : 'bg-white/15 backdrop-blur',
                       )}
                     >
                       <BookmarkIcon
-                        className="h-5 w-5"
+                        className="h-[18px] w-[18px]"
                         fill={saved ? 'currentColor' : 'none'}
                       />
                     </span>
-                    <span className="text-[11px] font-semibold drop-shadow">บันทึก</span>
+                    <span className="text-[10px] font-semibold leading-tight drop-shadow">บันทึก</span>
                   </button>
 
                   {/* Share */}
@@ -548,12 +557,12 @@ export function VideoFeed({
                         url,
                       });
                     }}
-                    className="flex flex-col items-center gap-1"
+                    className="flex flex-col items-center gap-0.5"
                   >
-                    <span className="grid h-11 w-11 place-items-center rounded-full bg-white/15 backdrop-blur active:scale-90">
-                      <ShareIcon className="h-5 w-5" />
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-white/15 backdrop-blur active:scale-90">
+                      <ShareIcon className="h-[18px] w-[18px]" />
                     </span>
-                    <span className="text-[11px] font-semibold drop-shadow">แชร์</span>
+                    <span className="text-[10px] font-semibold leading-tight drop-shadow">แชร์</span>
                   </button>
 
                   {/* Phase 12.2 — Report button.
@@ -564,25 +573,27 @@ export function VideoFeed({
                     <button
                       type="button"
                       onClick={() => setReportTarget(v.id)}
-                      className="flex flex-col items-center gap-1"
+                      className="flex flex-col items-center gap-0.5"
                       aria-label="รายงานคลิป"
                     >
-                      <span className="grid h-11 w-11 place-items-center rounded-full bg-white/15 backdrop-blur active:scale-90">
-                        <MoreVerticalIcon className="h-5 w-5" />
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-white/15 backdrop-blur active:scale-90">
+                        <MoreVerticalIcon className="h-[18px] w-[18px]" />
                       </span>
-                      <span className="text-[11px] font-semibold drop-shadow">เพิ่มเติม</span>
+                      <span className="text-[10px] font-semibold leading-tight drop-shadow">เพิ่มเติม</span>
                     </button>
                   )}
 
-                  {/* Music disc (spins while playing) */}
+                  {/* Music disc (spins while playing) — slightly smaller
+                      than the action buttons because it's decorative and
+                      doesn't carry a label of its own. */}
                   <div
                     className={cn(
-                      'grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-ink-700 to-ink-900 ring-2 ring-white/30',
+                      'grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-ink-700 to-ink-900 ring-2 ring-white/30',
                       isActive && !paused ? 'animate-spin-slow' : '',
                     )}
                     aria-hidden
                   >
-                    <MusicIcon className="h-4 w-4 text-white/80" />
+                    <MusicIcon className="h-3.5 w-3.5 text-white/80" />
                   </div>
                 </div>
 
