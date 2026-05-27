@@ -54,9 +54,10 @@ export function CustomerShell({ children }: { children: ReactNode }): JSX.Elemen
     <div
       className={cn(
         'bg-surface text-surface-strong min-h-dvh',
-        // Reserve room for the mobile bottom nav (h-bottomnav-m = 72 px +
-        // safe-area padding). Slightly extra to keep CTAs comfortably clear
-        // of the nav bar on routes like cart / product / checkout.
+        // Reserve room for the mobile bottom nav (h-bottomnav-m = 56 px +
+        // safe-area padding). `pb-28` (112 px) still leaves comfortable
+        // breathing room above the nav bar on cart / product / checkout
+        // pages even after the rail itself was tightened.
         !immersive && 'pb-28 lg:pb-0',
       )}
     >

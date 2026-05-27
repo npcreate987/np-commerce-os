@@ -9,8 +9,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import {
   CommentIcon,
   HomeIcon,
+  MapPinIcon,
   PlusIcon,
-  StoreIcon,
   UserIcon,
 } from '@/components/icons';
 import type { ComponentType, SVGProps } from 'react';
@@ -39,15 +39,18 @@ interface Props {
  * Layout
  * ------
  *   ┌────────────────────────────────────────────────────────────┐
- *   │  🏠       🛒•      ┌──┐      💬⁹⁹⁺      👤                  │
- *   │ หน้าหลัก  ร้านค้า  │ + │  กล่องข้อความ  โปรไฟล์            │
+ *   │  🏠       📍      ┌──┐      💬⁹⁹⁺      👤                   │
+ *   │ หน้าหลัก ใกล้ฉัน  │ + │  กล่องข้อความ  โปรไฟล์            │
  *   │                    └──┘                                     │
  *   └────────────────────────────────────────────────────────────┘
  *
  * - Five evenly distributed items; the centre "+" is the signature TikTok
  *   block (white rect with cyan + pink misregistration slabs) that links to
  *   the clip composer at `/feed/create`.
- * - `ร้านค้า` shows a small red dot when there are unsent cart items.
+ * - `ใกล้ฉัน` deep-links to `/local` (Local Commerce shop directory).
+ *   Phase 20.3 — replaced the older `ร้านค้า` shop tab here so the
+ *   primary commerce surface reflects the geo-first product strategy
+ *   (the shop catalog is still reachable from `/feed/shop`).
  * - `กล่องข้อความ` shows an unread count badge driven by the inbox query.
  *
  * Variants
@@ -96,10 +99,15 @@ export function CustomerBottomNav({ variant = 'default' }: Props = {}): JSX.Elem
       match: (p) => p === '/feed' || p === '/',
     },
     {
-      href: '/feed/shop',
-      label: 'ร้านค้า',
-      Icon: StoreIcon,
+      // Phase 20.3 — promoted Local Commerce ("near me") into the
+      // primary tab slot. The same dot indicator now fires when the
+      // cart has items or when the shop tab would have signalled
+      // unfinished business, so the affordance survives.
+      href: '/local',
+      label: 'ใกล้ฉัน',
+      Icon: MapPinIcon,
       match: (p) =>
+        p.startsWith('/local') ||
         p.startsWith('/feed/shop') ||
         p.startsWith('/product') ||
         p.startsWith('/cart'),
@@ -133,7 +141,15 @@ export function CustomerBottomNav({ variant = 'default' }: Props = {}): JSX.Elem
             'bg-black text-white'
           : 'border-t border-surface bg-surface/95 text-surface-strong backdrop-blur-xl',
       )}
-      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 6px)' }}
+      // Phase 20.4 — pull the icons flush with the bottom edge of the
+      // visible viewport. On devices with the Android 3-button nav
+      // (or any system gesture bar) `env(safe-area-inset-bottom)` is
+      // 0 because the WebView is already inset above the OS bar, so
+      // dropping the explicit `+6px` buffer is what closes the gap.
+      // The inset value still kicks in on iPhones with a notch /
+      // home-indicator so the labels never sit on top of the gesture
+      // pill there.
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {/* Soft fade ABOVE the bar (overlay-only). Sits as a sibling so
           the bar itself stays fully opaque and labels never lose
@@ -193,7 +209,11 @@ function NavTab({
     <Link
       href={href}
       aria-label={label}
-      className="group relative flex flex-col items-center justify-center gap-0.5 pt-0.5"
+      // `justify-end` plus a tiny `pb-1` parks the icon + label stack
+      // at the bottom of the 72-px nav cell instead of centring it,
+      // matching the TikTok reference where the labels almost touch
+      // the bottom of the bar.
+      className="group relative flex flex-col items-center justify-end gap-0.5 pb-1"
     >
       <span
         className={cn(
