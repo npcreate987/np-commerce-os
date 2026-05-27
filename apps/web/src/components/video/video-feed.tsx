@@ -25,6 +25,7 @@ import {
   VolumeOnIcon,
 } from '@/components/icons';
 import { ReportSheet } from '@/components/video/report-sheet';
+import { useUserGeo } from '@/lib/use-user-geo';
 import type { VideoFeedItem } from '@np/types';
 
 /**
@@ -95,16 +96,33 @@ export function VideoFeed({
   // Phase 12.2 — id of the video the user is reporting (null when sheet hidden)
   const [reportTarget, setReportTarget] = useState<string | null>(null);
 
+  // Phase 19.7 — viewer's geolocation. `undefined` means we're still
+  // asking the platform; the feed query waits for *something* (null or
+  // a real fix) so we never double-fetch (cold-start fetch then immediately
+  // refetch with geo). Once resolved this stays stable for the session.
+  const geo = useUserGeo();
+  const geoReady = geo !== undefined;
+
   // ------- Data: infinite paginated list -------------------------------------
-  const listFn = fetcher ?? ((cursor: number, limit: number) =>
-    api.feed.list(token ?? null, cursor, limit));
+  const listFn =
+    fetcher ??
+    ((cursor: number, limit: number) =>
+      api.feed.list(token ?? null, cursor, limit, geo ?? undefined));
 
   const feedQ = useInfiniteQuery({
-    queryKey: ['feed', 'videos', token ? 'auth' : 'anon'],
+    // Geo is part of the cache key so a user travelling between cities
+    // gets fresh "near me" results and doesn't reuse a stale Bangkok list.
+    queryKey: [
+      'feed',
+      'videos',
+      token ? 'auth' : 'anon',
+      geo ? `${geo.lat.toFixed(2)}_${geo.lng.toFixed(2)}` : 'no-geo',
+    ],
     initialPageParam: 0,
     queryFn: ({ pageParam = 0 }) => listFn(pageParam as number, PAGE_LIMIT),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length === PAGE_LIMIT ? allPages.flat().length : undefined,
+    enabled: geoReady,
   });
 
   const items: VideoFeedItem[] = useMemo(
@@ -605,6 +623,18 @@ export function VideoFeed({
                       {v.shopName ? (
                         <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold backdrop-blur">
                           {v.shopName}
+                        </span>
+                      ) : null}
+                      {/* Phase 19.7 — proximity badge. Only rendered when the
+                          API returned a distance (caller passed geo AND shop
+                          has an active LocalStore). Stays out of layout
+                          otherwise so the caption row doesn't reflow. */}
+                      {v.distanceKm !== null && v.distanceKm !== undefined ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur">
+                          <span aria-hidden>📍</span>
+                          {v.distanceKm < 1
+                            ? `${Math.round(v.distanceKm * 1000)} ม.`
+                            : `${v.distanceKm.toFixed(1)} กม.`}
                         </span>
                       ) : null}
                     </Link>

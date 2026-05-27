@@ -249,6 +249,13 @@ export interface VideoFeedItem extends VideoPost {
   productPriceCents: number | null;
   shopName: string | null;
   liked: boolean;
+  /**
+   * Phase 19.7 — kilometres (rounded to 1 decimal) from the caller's
+   * `?lat=&lng=` to the shop's active `LocalStore`. Null when geo wasn't
+   * supplied OR the shop isn't local. UI: only render a distance pill
+   * when this is non-null.
+   */
+  distanceKm: number | null;
 }
 
 // Phase 12.2 — reports & admin moderation

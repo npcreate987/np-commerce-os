@@ -9,6 +9,7 @@ import {
 } from '@/components/icons';
 import { Orb } from '@/components/ui/glass';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
+import { NativeHomeRedirect } from '@/components/native-home-redirect';
 
 const marqueeWords = [
   'Flash Deal',
@@ -52,6 +53,8 @@ const desktopFeatures = [
 export default function HomePage(): JSX.Element {
   return (
     <main className="bg-surface text-surface-strong relative min-h-dvh overflow-hidden">
+      {/* Phase 19.7 — in Capacitor, bounce straight to /feed. No-op on web. */}
+      <NativeHomeRedirect />
       {/* === BACKDROP === */}
       <div className="absolute inset-0 -z-10 bg-mesh-soft" aria-hidden />
       <Orb className="left-[-40px] top-[-40px] h-72 w-72 bg-brand/45 lg:h-[480px] lg:w-[480px]" />

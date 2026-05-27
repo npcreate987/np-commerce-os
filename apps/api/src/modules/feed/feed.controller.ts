@@ -50,12 +50,30 @@ export class FeedController {
     @Req() req: any,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
   ): Promise<VideoFeedItem[]> {
     const userId = this.userFromHeader(req);
+    // Phase 19.7 — Geo is optional. We accept it as strings (Capacitor URL
+    // params are stringly-typed) and validate to finite numbers in normal
+    // lat/lng ranges. Bogus input silently falls back to score order rather
+    // than 400ing — the feed should never be unreachable.
+    const latN = lat != null ? Number(lat) : NaN;
+    const lngN = lng != null ? Number(lng) : NaN;
+    const geo =
+      Number.isFinite(latN) &&
+      Number.isFinite(lngN) &&
+      latN >= -90 &&
+      latN <= 90 &&
+      lngN >= -180 &&
+      lngN <= 180
+        ? { lat: latN, lng: lngN }
+        : undefined;
     return this.feed.feed(
       userId,
       cursor ? Number(cursor) : 0,
       limit ? Number(limit) : 20,
+      geo,
     );
   }
 

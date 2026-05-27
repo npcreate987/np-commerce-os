@@ -470,10 +470,25 @@ export const api = {
   },
 
   feed: {
-    list: (token: string | null, cursor = 0, limit = 20) =>
+    /**
+     * Phase 19.7 — `geo` is optional. When provided, the API tier-1 sorts
+     * by distance (≤ 25 km) and tier-2 falls back to popularity score.
+     * `lat`/`lng` are sent as plain query params (not in the body) so the
+     * Capacitor static export can prefetch through a plain HTTP cache.
+     */
+    list: (
+      token: string | null,
+      cursor = 0,
+      limit = 20,
+      geo?: { lat: number; lng: number },
+    ) =>
       request<VideoFeedItem[]>('GET', '/feed', {
         token: token ?? undefined,
-        query: { cursor, limit },
+        query: {
+          cursor,
+          limit,
+          ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
+        },
       }),
     one: (token: string | null, id: string) =>
       request<VideoFeedItem | null>('GET', `/feed/${id}`, { token: token ?? undefined }),

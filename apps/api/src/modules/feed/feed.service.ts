@@ -43,7 +43,46 @@ interface DbFeedRow extends DbVideo {
   productPriceCents: number | null;
   shopName: string | null;
   liked: number | null;
+  /** Phase 19.7 — proximity. null when caller didn't pass geo or shop has no LocalStore. */
+  distanceKm?: number | null;
 }
+
+/** Phase 19.7 — user geo passed through from the controller. */
+export interface FeedGeoOpts {
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Haversine great-circle distance in km between two lat/lng points.
+ *
+ * Accurate to ~0.5% over commerce-scale distances (any two points within
+ * Thailand). Postgres lacks a built-in for this and we don't yet have
+ * PostGIS / earthdistance installed — but the data scale (one row per
+ * shop-with-localstore) makes a per-request JS computation cheaper than
+ * pulling extensions into the migration story for what is effectively
+ * a sort key.
+ */
+function haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371; // mean Earth radius (km)
+  const toRad = (d: number): number => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+/** Phase 19.7 — "Near me" radius in km. Beyond this we drop the proximity
+ *  weight and fall back to the popularity score, so a brilliant viral
+ *  clip in Chiang Mai still has a chance to reach a Bangkok viewer. */
+const NEAR_ME_RADIUS_KM = 25;
 
 interface DbAdminRow extends DbFeedRow {
   pendingReports: number | null;
@@ -85,6 +124,7 @@ function toFeedItem(r: DbFeedRow): VideoFeedItem {
     productPriceCents: r.productPriceCents,
     shopName: r.shopName,
     liked: r.liked === 1,
+    distanceKm: r.distanceKm ?? null,
   };
 }
 
@@ -111,15 +151,56 @@ export class FeedService {
     userId: string | null,
     cursor: number = 0,
     limit: number = 20,
+    geo?: FeedGeoOpts,
   ): Promise<VideoFeedItem[]> {
     const lim = Math.min(Math.max(limit, 1), 50);
-    const videos = await this.prisma.videoPost.findMany({
+
+    // Phase 19.7 — when the caller knows where they are, we pull a wider
+    // candidate pool (so distance-sort has room to work) and re-rank in JS.
+    // Without geo we keep the cheap O(N) score-ordered scan.
+    if (!geo) {
+      const videos = await this.prisma.videoPost.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: [{ score: 'desc' }, { createdAt: 'desc' }],
+        skip: cursor,
+        take: lim,
+      });
+      return this.hydrateFeed(videos, userId);
+    }
+
+    // Geo path: pull a 4x pool, hydrate with LocalStore.lat/lng, then sort:
+    //   tier 1 — shop has a LocalStore within NEAR_ME_RADIUS_KM (distance asc)
+    //   tier 2 — everything else (score desc)
+    // We still respect `cursor` as an OFFSET so infinite scroll keeps working.
+    const poolSize = Math.min(lim * 4, 200);
+    const candidates = await this.prisma.videoPost.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ score: 'desc' }, { createdAt: 'desc' }],
       skip: cursor,
-      take: lim,
+      take: poolSize,
     });
-    return this.hydrateFeed(videos, userId);
+    const hydrated = await this.hydrateFeed(candidates, userId, geo);
+
+    // Stable sort: distance ASC if available; otherwise leave as-is so the
+    // score-ordered pool order survives for the non-local tier.
+    const tierNear: VideoFeedItem[] = [];
+    const tierFar: VideoFeedItem[] = [];
+    for (const v of hydrated) {
+      if (
+        v.distanceKm !== null &&
+        v.distanceKm !== undefined &&
+        v.distanceKm <= NEAR_ME_RADIUS_KM
+      ) {
+        tierNear.push(v);
+      } else {
+        tierFar.push(v);
+      }
+    }
+    tierNear.sort(
+      (a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity),
+    );
+    // tierFar stays in score order from the SQL query.
+    return [...tierNear, ...tierFar].slice(0, lim);
   }
 
   async byId(id: string, userId: string | null): Promise<VideoFeedItem | null> {
@@ -155,6 +236,7 @@ export class FeedService {
       updatedAt: Date;
     }>,
     userId: string | null,
+    geo?: FeedGeoOpts,
   ): Promise<VideoFeedItem[]> {
     if (videos.length === 0) return [];
 
@@ -166,7 +248,7 @@ export class FeedService {
       new Set(videos.map((v) => v.shopId).filter((x): x is string => !!x)),
     );
 
-    const [authors, products, shops, likedRows] = await Promise.all([
+    const [authors, products, shops, likedRows, localStores] = await Promise.all([
       authorIds.length
         ? this.prisma.user.findMany({
             where: { id: { in: authorIds } },
@@ -195,15 +277,36 @@ export class FeedService {
             select: { videoId: true },
           })
         : Promise.resolve([] as Array<{ videoId: string }>),
+      // Phase 19.7 — fetch active LocalStores for the shops in this pool ONLY
+      // when geo is provided. Saves a round-trip for the cold-start path.
+      geo && shopIds.length
+        ? this.prisma.localStore.findMany({
+            where: { shopId: { in: shopIds }, active: true },
+            select: { shopId: true, lat: true, lng: true },
+          })
+        : Promise.resolve(
+            [] as Array<{ shopId: string; lat: number; lng: number }>,
+          ),
     ]);
 
     const authorMap = new Map(authors.map((a) => [a.id, a.name]));
     const productMap = new Map(products.map((p) => [p.id, p]));
     const shopMap = new Map(shops.map((s) => [s.id, s.name]));
     const likedSet = new Set(likedRows.map((r) => r.videoId));
+    const localStoreMap = new Map(
+      localStores.map((ls) => [ls.shopId, { lat: ls.lat, lng: ls.lng }]),
+    );
 
     return videos.map((v): VideoFeedItem => {
       const product = v.productId ? productMap.get(v.productId) : undefined;
+      let distanceKm: number | null = null;
+      if (geo && v.shopId) {
+        const store = localStoreMap.get(v.shopId);
+        if (store) {
+          // Round to 1 decimal: UI shows "1.2 กม." rather than "1.234567 กม.".
+          distanceKm = Math.round(haversineKm(geo, store) * 10) / 10;
+        }
+      }
       return toFeedItem({
         ...v,
         createdAt:
@@ -215,6 +318,7 @@ export class FeedService {
         productPriceCents: product?.priceCents ?? null,
         shopName: v.shopId ? shopMap.get(v.shopId) ?? null : null,
         liked: likedSet.has(v.id) ? 1 : null,
+        distanceKm,
       });
     });
   }

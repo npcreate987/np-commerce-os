@@ -254,6 +254,15 @@ export interface VideoFeedItem extends VideoPost {
   productPriceCents: number | null;
   shopName: string | null;
   liked: boolean;
+  /**
+   * Phase 19.7 — distance (kilometres, rounded to 1 decimal) from the user
+   * to the shop's `LocalStore` location. Only present when:
+   *   1. The caller passed `?lat=&lng=` on `/feed`, AND
+   *   2. The shop has an active `LocalStore` row (lat/lng).
+   * Null means "shop is non-local" OR "no user location" — render the video
+   * without a distance pill, never as "0 km".
+   */
+  distanceKm: number | null;
 }
 
 // =============================================================================
