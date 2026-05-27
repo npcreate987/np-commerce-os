@@ -70,8 +70,9 @@ model Shop {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  products Product[]
-  orders   Order[]
+  products   Product[]
+  orders     Order[]
+  localStore LocalStore?
 
   @@index([ownerId])
   @@map("shops")
@@ -439,6 +440,7 @@ model AffiliateAttribution {
 model LocalStore {
   id                String   @id @default(cuid())
   shopId            String   @unique
+  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   /// "RESTAURANT" | "CAFE" | "GROCERY" | "FRESH_MARKET" | "LOCAL_GOODS" | "SERVICE"
   kind              String   @default("LOCAL_GOODS")
   lat               Float

@@ -98,53 +98,28 @@ export class LocalService {
   ): Promise<LocalStore> {
     await this.assertShopOwner(shopId, userId);
 
-    const existing = await this.findStoreByShop(shopId);
-    if (existing) {
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE local_stores SET
-            kind = ?, lat = ?, lng = ?, addressText = ?,
-            deliveryRadiusKm = ?, pickupEnabled = ?, deliveryEnabled = ?,
-            prepTimeMinutes = ?, openHoursJson = ?, active = ?,
-            baseDeliveryCents = ?, perKmCents = ?, updatedAt = CURRENT_TIMESTAMP
-          WHERE id = ?`,
-        input.kind,
-        input.lat,
-        input.lng,
-        input.addressText,
-        input.deliveryRadiusKm,
-        input.pickupEnabled ? 1 : 0,
-        input.deliveryEnabled ? 1 : 0,
-        input.prepTimeMinutes,
-        JSON.stringify(input.openHours ?? {}),
-        input.active ? 1 : 0,
-        input.baseDeliveryCents,
-        input.perKmCents,
-        existing.id,
-      );
-    } else {
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO local_stores
-          (id, shopId, kind, lat, lng, addressText,
-           deliveryRadiusKm, pickupEnabled, deliveryEnabled,
-           prepTimeMinutes, openHoursJson, active,
-           baseDeliveryCents, perKmCents)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        newId('lst'),
-        shopId,
-        input.kind,
-        input.lat,
-        input.lng,
-        input.addressText,
-        input.deliveryRadiusKm,
-        input.pickupEnabled ? 1 : 0,
-        input.deliveryEnabled ? 1 : 0,
-        input.prepTimeMinutes,
-        JSON.stringify(input.openHours ?? {}),
-        input.active ? 1 : 0,
-        input.baseDeliveryCents,
-        input.perKmCents,
-      );
-    }
+    // Phase 19.7 — ported off SQLite-shaped raw SQL (?/1/0 booleans,
+    // CURRENT_TIMESTAMP) to Prisma `upsert`. LocalStore has UNIQUE(shopId)
+    // so `where: { shopId }` is a valid upsert target.
+    const data = {
+      kind: input.kind,
+      lat: input.lat,
+      lng: input.lng,
+      addressText: input.addressText,
+      deliveryRadiusKm: input.deliveryRadiusKm,
+      pickupEnabled: input.pickupEnabled,
+      deliveryEnabled: input.deliveryEnabled,
+      prepTimeMinutes: input.prepTimeMinutes,
+      openHoursJson: JSON.stringify(input.openHours ?? {}),
+      active: input.active,
+      baseDeliveryCents: input.baseDeliveryCents,
+      perKmCents: input.perKmCents,
+    };
+    await this.prisma.localStore.upsert({
+      where: { shopId },
+      update: data,
+      create: { shopId, ...data },
+    });
 
     const fresh = await this.findStoreByShop(shopId);
     if (!fresh) throw new Error('Local store upsert failed');
@@ -162,34 +137,55 @@ export class LocalService {
   }
 
   /**
-   * Nearby search via Haversine; SQLite ไม่มี geo native ก็เลย load + filter ฝั่ง app.
-   * Active set ขนาดเล็กพอที่ดีในเฟสนี้.
+   * Nearby search via Haversine.
+   *
+   * Phase 19.7 — ported off SQLite raw SQL to Prisma. Postgres lacks a
+   * cheap built-in geo distance (no PostGIS / earthdistance in our
+   * default migration story) and the active set per request is small
+   * enough that pulling the candidate pool and filtering in JS stays
+   * well under 10 ms.
    */
   async nearby(query: NearbyQuery): Promise<LocalStore[]> {
-    const condKind = query.kind ? `AND ls.kind = ?` : '';
-    const params: unknown[] = [];
-    if (query.kind) params.push(query.kind);
-
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT ls.id, ls.shopId, ls.kind, ls.lat, ls.lng, ls.addressText,
-              ls.deliveryRadiusKm, ls.pickupEnabled, ls.deliveryEnabled,
-              ls.prepTimeMinutes, ls.openHoursJson, ls.active,
-              ls.baseDeliveryCents, ls.perKmCents, ls.createdAt,
-              s.name AS shopName, s.slug AS shopSlug
-         FROM local_stores ls
-         INNER JOIN shops s ON s.id = ls.shopId
-         WHERE ls.active = 1
-           AND s.status IN ('ACTIVE', 'PENDING')
-           ${condKind}
-         LIMIT 500`,
-      ...params,
-    )) as Array<DbLocalStore & DbShopInfo>;
+    const stores = await this.prisma.localStore.findMany({
+      where: {
+        active: true,
+        ...(query.kind ? { kind: query.kind } : {}),
+        shop: { status: { in: ['ACTIVE', 'PENDING'] } },
+      },
+      include: { shop: { select: { name: true, slug: true } } },
+      take: 500,
+    });
 
     const out: LocalStore[] = [];
-    for (const r of rows) {
-      const distance = haversineKm(query.lat, query.lng, r.lat, r.lng);
+    for (const ls of stores) {
+      const distance = haversineKm(query.lat, query.lng, ls.lat, ls.lng);
       if (distance > query.radiusKm) continue;
-      out.push({ ...this.toStore(r, r), distanceKm: Math.round(distance * 100) / 100 });
+      out.push({
+        ...this.toStore(
+          {
+            id: ls.id,
+            shopId: ls.shopId,
+            kind: ls.kind,
+            lat: ls.lat,
+            lng: ls.lng,
+            addressText: ls.addressText,
+            deliveryRadiusKm: ls.deliveryRadiusKm,
+            pickupEnabled: ls.pickupEnabled ? 1 : 0,
+            deliveryEnabled: ls.deliveryEnabled ? 1 : 0,
+            prepTimeMinutes: ls.prepTimeMinutes,
+            openHoursJson: ls.openHoursJson,
+            active: ls.active ? 1 : 0,
+            baseDeliveryCents: ls.baseDeliveryCents,
+            perKmCents: ls.perKmCents,
+            createdAt:
+              ls.createdAt instanceof Date
+                ? ls.createdAt.toISOString()
+                : ls.createdAt,
+          },
+          { shopName: ls.shop?.name ?? null, shopSlug: ls.shop?.slug ?? null },
+        ),
+        distanceKm: Math.round(distance * 100) / 100,
+      });
     }
     out.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
     return out.slice(0, 80);
@@ -506,19 +502,37 @@ export class LocalService {
   }
 
   private async findStoreByShop(shopId: string): Promise<LocalStore | null> {
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT ls.id, ls.shopId, ls.kind, ls.lat, ls.lng, ls.addressText,
-              ls.deliveryRadiusKm, ls.pickupEnabled, ls.deliveryEnabled,
-              ls.prepTimeMinutes, ls.openHoursJson, ls.active,
-              ls.baseDeliveryCents, ls.perKmCents, ls.createdAt,
-              s.name AS shopName, s.slug AS shopSlug
-         FROM local_stores ls
-         LEFT JOIN shops s ON s.id = ls.shopId
-         WHERE ls.shopId = ?`,
-      shopId,
-    )) as Array<DbLocalStore & DbShopInfo>;
-    const first = rows[0];
-    return first ? this.toStore(first, first) : null;
+    // Phase 19.7 — ported off raw SQL. `LocalStore.shopId` is UNIQUE so
+    // `findUnique` is single-row by definition; the optional shop include
+    // gives us the same shopName/shopSlug we used to JOIN for.
+    const ls = await this.prisma.localStore.findUnique({
+      where: { shopId },
+      include: { shop: { select: { name: true, slug: true } } },
+    });
+    if (!ls) return null;
+    return this.toStore(
+      {
+        id: ls.id,
+        shopId: ls.shopId,
+        kind: ls.kind,
+        lat: ls.lat,
+        lng: ls.lng,
+        addressText: ls.addressText,
+        deliveryRadiusKm: ls.deliveryRadiusKm,
+        pickupEnabled: ls.pickupEnabled ? 1 : 0,
+        deliveryEnabled: ls.deliveryEnabled ? 1 : 0,
+        prepTimeMinutes: ls.prepTimeMinutes,
+        openHoursJson: ls.openHoursJson,
+        active: ls.active ? 1 : 0,
+        baseDeliveryCents: ls.baseDeliveryCents,
+        perKmCents: ls.perKmCents,
+        createdAt:
+          ls.createdAt instanceof Date
+            ? ls.createdAt.toISOString()
+            : ls.createdAt,
+      },
+      { shopName: ls.shop?.name ?? null, shopSlug: ls.shop?.slug ?? null },
+    );
   }
 
   private async getCategory(id: string): Promise<MenuCategory | null> {
