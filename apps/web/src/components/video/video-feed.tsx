@@ -771,13 +771,17 @@ function FeedTopBar({
     [nearbyLabel],
   );
 
-  // Keep the active tab horizontally centred when it changes. The native
-  // `scrollIntoView({ inline: 'center' })` does the smooth math for us.
+  // Phase 20.2 — only scroll the tab into view if it's *not already*
+  // visible. `inline: 'nearest'` matches TikTok's behaviour: when all
+  // 5 tabs fit on screen we don't tug them around, and on a narrow
+  // device we only scroll enough to surface the tapped tab. The old
+  // `inline: 'center'` was over-eager and shoved the leftmost tabs
+  // offscreen as soon as the user landed on "สำหรับคุณ".
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   useEffect(() => {
     const el = tabRefs.current.get(activeTab);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
     }
   }, [activeTab]);
 
@@ -786,31 +790,37 @@ function FeedTopBar({
       className="pointer-events-none absolute inset-x-0 top-0 z-30 lg:hidden"
       style={{ paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}
     >
-      <div className="pointer-events-auto flex items-center gap-3 pl-3 pr-3">
+      <div className="pointer-events-auto flex items-center gap-1.5 pl-2 pr-1.5">
         {/* LIVE pill — left. Tiny pulsing red dot for "broadcast right now"
-            affordance; the wrap into `aria-label` keeps the dot decorative. */}
+            affordance; the wrap into `aria-label` keeps the dot decorative.
+            Compact 11-px text so the dot+label only steals ~38 px from the
+            tab strip, leaving room for all 5 tabs on a 360-px-wide device. */}
         <Link
           href="/feed?tab=live"
           aria-label="ดูถ่ายทอดสด"
           prefetch={false}
-          className="flex shrink-0 items-center gap-1.5 text-[13px] font-bold tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
+          className="flex shrink-0 items-center gap-0.5 text-[11px] font-bold tracking-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
         >
-          <span aria-hidden className="relative inline-flex h-2 w-2">
+          <span aria-hidden className="relative inline-flex h-1.5 w-1.5">
             <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/80" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-rose-500" />
           </span>
           <span>LIVE</span>
         </Link>
 
         {/* Tabs strip — center, horizontally scrollable on overflow.
-            `gap-5` matches TikTok's roomy tab spacing on iOS; combined
-            with `scroll-padding-inline` keeps the active tab centred
-            instead of glued to the leading edge. */}
+            `gap-2` (8 px) + 12 px font matches what TikTok ships on
+            iOS and keeps all 5 tabs visible on a 360-px-wide Android
+            device, including the longer dynamic city labels
+            ("อุบลราชธานี" / "ฉะเชิงเทรา" being the worst case at
+            ~11 chars). 12 px on a 3x DPI phone is comfortably
+            readable; the active tab gets the bolder text + underline
+            so the chrome still reads. */}
         <nav
           role="tablist"
           aria-label="ฟีดวิดีโอ"
-          className="hide-scrollbar -mx-1 flex flex-1 items-center gap-5 overflow-x-auto px-2 text-[14px] font-bold"
-          style={{ scrollSnapType: 'x proximity', scrollPaddingInline: '40%' }}
+          className="hide-scrollbar flex flex-1 items-center justify-between gap-2 overflow-x-auto text-[12px] font-bold"
+          style={{ scrollSnapType: 'x proximity' }}
         >
           {tabs.map((t) => {
             const active = t.id === activeTab;
@@ -837,7 +847,7 @@ function FeedTopBar({
                 {active ? (
                   <span
                     aria-hidden
-                    className="absolute -bottom-1 left-1/2 h-[3px] w-6 -translate-x-1/2 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
+                    className="absolute -bottom-1 left-1/2 h-[3px] w-5 -translate-x-1/2 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
                   />
                 ) : null}
               </button>
@@ -851,7 +861,7 @@ function FeedTopBar({
           href="/search"
           aria-label="ค้นหา"
           prefetch={false}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
         >
           <SearchIcon className="h-[22px] w-[22px]" />
         </Link>

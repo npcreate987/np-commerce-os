@@ -32,9 +32,22 @@ import { cn } from '@/lib/cn';
  */
 const IMMERSIVE_ROUTES = new Set<string>(['/feed']);
 
+/**
+ * Strip the trailing slash that the Capacitor static export adds
+ * (`next.config.mjs` sets `trailingSlash: true` so `/feed` is served
+ * as `/feed/index.html`). Without this normalisation the immersive
+ * detection was failing on native, which dropped the mobile search
+ * header on top of the TikTok-style feed top bar.
+ */
+function normalisePath(p: string | null | undefined): string {
+  if (!p) return '';
+  if (p.length > 1 && p.endsWith('/')) return p.slice(0, -1);
+  return p;
+}
+
 export function CustomerShell({ children }: { children: ReactNode }): JSX.Element {
   const pathname = usePathname();
-  const immersive = pathname ? IMMERSIVE_ROUTES.has(pathname) : false;
+  const immersive = IMMERSIVE_ROUTES.has(normalisePath(pathname));
   const token = useAuthStore((s) => s.token);
 
   return (
