@@ -3,7 +3,6 @@ import { ReactNode } from 'react';
 import { IBM_Plex_Sans_Thai, Anuphan } from 'next/font/google';
 import { QueryProvider } from '@/lib/query-provider';
 import { InstallPrompt } from '@/components/install-prompt';
-import { OtaBridge } from '@/components/ota-bridge';
 import { ThemeProvider } from '@/components/theme-provider';
 import { THEME_NO_FLASH_SCRIPT } from '@/lib/theme';
 import './globals.css';
@@ -69,11 +68,6 @@ export default function RootLayout({ children }: { children: ReactNode }): JSX.E
       <body className="font-sans">
         <ThemeProvider>
           <QueryProvider>
-            {/* Phase 19.2 — OtaBridge mounts at root so OTA + Capgo notifyAppReady
-                + splash hide + deep links + lifecycle run on EVERY route (landing,
-                admin, merchant, etc.), not just /(customer)/*. Renders ForceUpdateGate
-                + AttConsentGate as global UI gates. */}
-            <OtaBridge />
             {children}
             <InstallPrompt />
           </QueryProvider>

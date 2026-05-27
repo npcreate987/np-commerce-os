@@ -3,6 +3,7 @@
 build/
 *.aab
 *.apk
+*.gradle.bak
 gradle.properties.local
 
 # Secrets — must NEVER end up in git
