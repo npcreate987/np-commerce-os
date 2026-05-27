@@ -7,16 +7,31 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <!-- Phase 20.3 — paint the Android system bars black so they
+             blend with the TikTok-style feed chrome. Without this,
+             the gesture-bar / 3-button nav at the very bottom of the
+             screen renders on a default-white surface that breaks
+             the immersive feel. Available since API 21 (Lollipop);
+             our min-sdk is 23 so the property is always honoured. -->
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
     </style>
 
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
     </style>
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <!-- Splash launch theme also needs the bar override so the
+             very-first frame after cold-start doesn't flash white
+             system bars before the WebView paints. -->
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
     </style>
 </resources>
