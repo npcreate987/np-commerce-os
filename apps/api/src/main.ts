@@ -41,6 +41,61 @@ function isDevOrigin(origin: string): boolean {
   );
 }
 
+/**
+ * Phase 20.1 — Postgres-portable carrier seed.
+ *
+ * The legacy `bootstrap-phase2.ts` seeder used raw SQL with `?`
+ * placeholders that PG silently rejected, so the `carriers` table on
+ * Railway has been empty since the SQLite → Postgres migration. An
+ * empty carrier list breaks every checkout (the FE bails when it
+ * can't auto-select a default), which in turn blocks Phase 20.1's
+ * `/payments/by-order/:orderId` polling path end-to-end.
+ *
+ * This routine runs on EVERY startup; it's a no-op when the rows are
+ * present (Prisma upsert keyed on `code`). The data deliberately
+ * matches the SQLite seed so existing dev DBs stay byte-identical.
+ */
+async function seedCarriersIdempotent(prisma: PrismaClient): Promise<void> {
+  const carriers: Array<{
+    code: string;
+    name: string;
+    kind: string;
+    baseRateCents: number;
+    perKgCents: number;
+    etaText: string;
+  }> = [
+    { code: 'FLASH', name: 'Flash Express', kind: 'PARCEL', baseRateCents: 3500, perKgCents: 1200, etaText: '1–2 วัน' },
+    { code: 'KERRY', name: 'Kerry Express', kind: 'PARCEL', baseRateCents: 4500, perKgCents: 1500, etaText: '1–3 วัน' },
+    { code: 'JT', name: 'J&T Express', kind: 'PARCEL', baseRateCents: 3000, perKgCents: 1100, etaText: '1–2 วัน' },
+    { code: 'THP', name: 'ไปรษณีย์ไทย EMS', kind: 'PARCEL', baseRateCents: 5000, perKgCents: 2000, etaText: '2–3 วัน' },
+    { code: 'GRAB', name: 'Grab Express', kind: 'EXPRESS_LOCAL', baseRateCents: 6000, perKgCents: 0, etaText: 'ภายใน 2 ชม.' },
+    { code: 'LALAMOVE', name: 'Lalamove', kind: 'EXPRESS_LOCAL', baseRateCents: 5500, perKgCents: 0, etaText: 'ภายใน 2 ชม.' },
+  ];
+  for (const c of carriers) {
+    await prisma.carrier.upsert({
+      where: { code: c.code },
+      // We intentionally don't overwrite operator-tuned rates on existing
+      // rows — only the optional `etaText` (cheap UI string) and the
+      // active flag are kept in sync.
+      update: { name: c.name, kind: c.kind, etaText: c.etaText, active: true },
+      create: {
+        // Prisma's `cuid()` default fills `id` if you omit it, but we keep
+        // the legacy `car_*` prefix so old log lines remain searchable.
+        id: `car_${c.code.toLowerCase()}`,
+        code: c.code,
+        name: c.name,
+        kind: c.kind,
+        baseRateCents: c.baseRateCents,
+        perKgCents: c.perKgCents,
+        etaText: c.etaText,
+        active: true,
+      },
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[bootstrap] seeded ${carriers.length} carriers (idempotent)`);
+}
+
 async function bootstrap(): Promise<void> {
   // Phase 2..12: runtime DB migration (idempotent).
   // Behaviour on failure depends on `STRICT_MIGRATIONS`:
@@ -77,6 +132,15 @@ async function bootstrap(): Promise<void> {
         '[bootstrap] SKIP_BOOTSTRAP_MIGRATIONS=true -- ' +
           'skipping runPhase2..13 (legacy SQLite-shaped migrations).',
       );
+      // Phase 20.1 — but we DO still need to seed the carriers table so
+      // `useCheckoutState` finds a default carrier and PromptPay e2e
+      // flows work on Railway. The bootstrap-phase2 seeder used raw
+      // SQL with `?` placeholders that don't survive Postgres; this
+      // Prisma upsert is the same intent expressed portably.
+      await seedCarriersIdempotent(p).catch((e: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('[bootstrap] carrier seed failed (continuing):', e);
+      });
       await p.$disconnect().catch(() => {});
     } else {
       try {
