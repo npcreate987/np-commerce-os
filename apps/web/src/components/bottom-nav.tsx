@@ -54,8 +54,11 @@ interface Props {
  * --------
  * - `default` — solid light/dark surface with hairline top border. Used on
  *   standard customer pages (cart, profile, search, …).
- * - `overlay` — flat dark with a soft top gradient for legibility. Used on
- *   the immersive `/feed` reel so the bar reads as part of the player UI.
+ * - `overlay` — solid black bar matching the TikTok feed chrome. A thin
+ *   gradient *above* the bar (separate element) keeps the video-to-chrome
+ *   transition smooth without bleeding any transparency into the bar
+ *   itself — labels stay legible at all times. Used on the immersive
+ *   `/feed` reel.
  */
 export function CustomerBottomNav({ variant = 'default' }: Props = {}): JSX.Element {
   const pathname = usePathname() ?? '';
@@ -122,13 +125,26 @@ export function CustomerBottomNav({ variant = 'default' }: Props = {}): JSX.Elem
       className={cn(
         'fixed inset-x-0 bottom-0 z-bottomnav lg:hidden',
         overlay
-          ? // The reel paints its own background, so we only add a soft top
-            // gradient for legibility against light video frames.
-            'bg-gradient-to-t from-black via-black/85 to-transparent pt-3 text-white'
+          ? // Solid black like TikTok's feed bar (the prior gradient
+            // made the icons sit on a half-transparent strip which
+            // washed out against light video frames). The 14-px
+            // fade rendered just above the bar (below) keeps the
+            // video-to-chrome boundary soft.
+            'bg-black text-white'
           : 'border-t border-surface bg-surface/95 text-surface-strong backdrop-blur-xl',
       )}
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 6px)' }}
     >
+      {/* Soft fade ABOVE the bar (overlay-only). Sits as a sibling so
+          the bar itself stays fully opaque and labels never lose
+          contrast. 14-px tall is enough to soften the video boundary
+          on a bright frame without eating screen real-estate. */}
+      {overlay ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-3.5 h-3.5 bg-gradient-to-t from-black to-transparent"
+        />
+      ) : null}
       <nav
         aria-label="แท็บหลัก"
         className="mx-auto grid h-bottomnav-m max-w-mobile grid-cols-5 items-stretch"
