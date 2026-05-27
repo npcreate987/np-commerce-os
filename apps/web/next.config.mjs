@@ -1,11 +1,28 @@
 import withPWAInit from '@ducanh2912/next-pwa';
 
+// Phase 19.5 — PWA is for the web channel only.
+//
+// In a Capacitor static-export build (BUILD_STATIC=true) we ship the bundle
+// inside the APK / IPA, so:
+//   1. The Workbox cache is wasted — assets are already on-device.
+//   2. The auto-injected `navigator.serviceWorker.register('/sw.js')` call
+//      runs against the `https://localhost/` Capacitor scheme and fails
+//      with an opaque "unknown error fetching the script" (Capacitor's
+//      WebView doesn't serve the SW with the right scope handling).
+//   3. The visible "Failed to register a ServiceWorker" console error
+//      pollutes logs and confuses both Sentry signal and the dry-run.
+// Disabling PWA for static builds prevents sw.js generation AND skips
+// the auto-registration script, fixing the dry-run console error in one
+// move without losing offline behavior (the bundle is already offline).
 const withPWA = withPWAInit({
   dest: 'public',
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
+  disable:
+    process.env.NODE_ENV === 'development' ||
+    process.env.DISABLE_PWA === 'true' ||
+    process.env.BUILD_STATIC === 'true',
   workboxOptions: {
     disableDevLogs: true,
   },

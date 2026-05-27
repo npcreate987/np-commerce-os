@@ -281,40 +281,53 @@ export class RecommendationService {
 
   private async _trending(limit = 12): Promise<ProductRecommendation[]> {
     const safe = Math.max(1, Math.min(limit, 30));
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT p.id, p.shopId, p.name, p.priceCents, s.name AS shopName,
-              COALESCE(SUM(CASE
-                WHEN o.id IS NOT NULL
-                  AND o.createdAt >= date('now','-7 days')
-                THEN oi.quantity ELSE 0 END), 0) AS u7,
-              COALESCE(SUM(CASE
-                WHEN o.id IS NOT NULL
-                  AND o.createdAt >= date('now','-30 days')
-                THEN oi.quantity ELSE 0 END), 0) AS u30
-       FROM products p
-       LEFT JOIN order_items oi ON oi.productId = p.id
-       LEFT JOIN orders o ON o.id = oi.orderId
-         AND o.status NOT IN ('CANCELLED')
-       LEFT JOIN shops s ON s.id = p.shopId
-       WHERE p.status = 'ACTIVE'
-       GROUP BY p.id
-       HAVING u7 >= 3
-       ORDER BY u7 DESC`,
-    )) as Array<{
+    // Phase 19.5 — pre-computed cutoff dates instead of inline SQLite `date('now','-N days')`
+    // (Postgres lacks that signature). Sent via $queryRaw tagged template so Prisma binds the
+    // params with the correct driver-native placeholder ($1, $2, ...) on every supported DB.
+    const now = new Date();
+    const cutoff7 = new Date(now.getTime() - 7 * 86400_000);
+    const cutoff30 = new Date(now.getTime() - 30 * 86400_000);
+    type TrendingRow = {
       id: string;
       shopId: string;
       name: string;
       priceCents: number;
       shopName: string | null;
-      u7: number;
-      u30: number;
-    }>;
+      u7: number | bigint;
+      u30: number | bigint;
+    };
+    const rows = (await this.prisma.$queryRaw<TrendingRow[]>`
+      SELECT p.id, p."shopId", p.name, p."priceCents", s.name AS "shopName",
+             COALESCE(SUM(CASE
+               WHEN o.id IS NOT NULL
+                 AND o."createdAt" >= ${cutoff7}
+               THEN oi.quantity ELSE 0 END), 0) AS u7,
+             COALESCE(SUM(CASE
+               WHEN o.id IS NOT NULL
+                 AND o."createdAt" >= ${cutoff30}
+               THEN oi.quantity ELSE 0 END), 0) AS u30
+      FROM products p
+      LEFT JOIN order_items oi ON oi."productId" = p.id
+      LEFT JOIN orders o ON o.id = oi."orderId"
+        AND o.status NOT IN ('CANCELLED')
+      LEFT JOIN shops s ON s.id = p."shopId"
+      WHERE p.status = 'ACTIVE'
+      GROUP BY p.id, s.name
+      HAVING COALESCE(SUM(CASE
+               WHEN o.id IS NOT NULL
+                 AND o."createdAt" >= ${cutoff7}
+               THEN oi.quantity ELSE 0 END), 0) >= 3
+      ORDER BY u7 DESC
+    `);
 
     // surge ratio: 7d-orders / (avg-weekly over 30d = u30 / 4.3)
+    // Postgres SUM() returns BIGINT via Prisma — coerce to number for math.
     const enriched = rows.map((r) => {
-      const baselineWeekly = r.u30 / 4.3;
-      const surge = baselineWeekly > 0 ? r.u7 / baselineWeekly : r.u7;
-      return { ...r, surge };
+      const u7 = Number(r.u7);
+      const u30 = Number(r.u30);
+      const baselineWeekly = u30 / 4.3;
+      const surge = baselineWeekly > 0 ? u7 / baselineWeekly : u7;
+      return { ...r, u7, u30, surge };
     });
     enriched.sort((a, b) => b.surge - a.surge);
 

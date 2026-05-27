@@ -88,16 +88,28 @@ const config: CapacitorConfig = {
     },
     Camera: {},
     Geolocation: {},
-    // Phase 19.2 — Capgo plugin ใช้เฉพาะเป็น download/swap runtime
-    // เราเขียน manifest fetch + bundle URL resolution เอง (apps/web/src/lib/live-updates.ts)
-    // แล้วเรียก CapacitorUpdater.download() ตรง ๆ — ไม่ใช้ Capgo Cloud (api.capgo.app)
-    // ปิด autoUpdate กัน plugin ping Capgo Cloud → 429 "on_premise_app"
+    // Phase 19.2 / 19.5 — Capgo plugin used ONLY as download/swap runtime.
+    // We host manifest + bundles ourselves (Railway API + Cloudflare R2) and
+    // call CapacitorUpdater.download() directly from apps/web/src/lib/live-updates.ts.
+    //
+    // The Capgo Cloud backend (api.capgo.app / plugin.capgo.app) is NOT used.
+    // Even with autoUpdate=false, the native plugin still pings its three
+    // default Capgo Cloud endpoints (updateUrl, channelUrl, statsUrl) on
+    // lifecycle events. Those were causing:
+    //   • 429 "on_premise_app" toast (Capgo flagging us as off-plan)
+    //   • "Stats batch sent successfully" log noise on every foreground
+    //     leak — leaking app usage to a 3rd party we never registered with
+    // Setting all three to '' fully decouples the plugin from Capgo Cloud
+    // while preserving the local bundle download/install code path.
     CapacitorUpdater: {
       autoUpdate: false,
       autoDeleteFailed: true,
       autoDeletePrevious: true,
       resetWhenUpdate: false,
       directUpdate: false,
+      updateUrl: '',
+      channelUrl: '',
+      statsUrl: '',
     },
   },
 };

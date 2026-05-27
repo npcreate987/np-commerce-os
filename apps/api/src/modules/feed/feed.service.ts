@@ -101,50 +101,122 @@ export class FeedService {
   // Public reads — only show ACTIVE videos
   // =============================================================================
 
+  /**
+   * Phase 19.5 — ported from raw `$queryRawUnsafe` (SQLite-only `?` placeholders +
+   * `LIMIT ? OFFSET ?` syntax) to Prisma client. The previous version 500'd on
+   * Postgres on every /feed request because Prisma's `$queryRawUnsafe` requires
+   * `$1, $2, ...` placeholders on Postgres while we passed `?` everywhere.
+   */
   async feed(
     userId: string | null,
     cursor: number = 0,
     limit: number = 20,
   ): Promise<VideoFeedItem[]> {
     const lim = Math.min(Math.max(limit, 1), 50);
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT v.*,
-              u.name AS authorName,
-              p.name AS productName,
-              p.priceCents AS productPriceCents,
-              s.name AS shopName,
-              ${userId ? `(SELECT 1 FROM video_reactions r WHERE r.videoId = v.id AND r.userId = ? AND r.kind = 'LIKE')` : 'NULL'} AS liked
-       FROM video_posts v
-       LEFT JOIN users u ON u.id = v.authorId
-       LEFT JOIN products p ON p.id = v.productId
-       LEFT JOIN shops s ON s.id = v.shopId
-       WHERE v.status = 'ACTIVE'
-       ORDER BY v.score DESC, v.createdAt DESC
-       LIMIT ? OFFSET ?`,
-      ...(userId ? [userId, lim, cursor] : [lim, cursor]),
-    )) as DbFeedRow[];
-
-    return rows.map(toFeedItem);
+    const videos = await this.prisma.videoPost.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: [{ score: 'desc' }, { createdAt: 'desc' }],
+      skip: cursor,
+      take: lim,
+    });
+    return this.hydrateFeed(videos, userId);
   }
 
   async byId(id: string, userId: string | null): Promise<VideoFeedItem | null> {
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT v.*,
-              u.name AS authorName,
-              p.name AS productName,
-              p.priceCents AS productPriceCents,
-              s.name AS shopName,
-              ${userId ? `(SELECT 1 FROM video_reactions r WHERE r.videoId = v.id AND r.userId = ? AND r.kind = 'LIKE')` : 'NULL'} AS liked
-       FROM video_posts v
-       LEFT JOIN users u ON u.id = v.authorId
-       LEFT JOIN products p ON p.id = v.productId
-       LEFT JOIN shops s ON s.id = v.shopId
-       WHERE v.id = ? AND v.status = 'ACTIVE'`,
-      ...(userId ? [userId, id] : [id]),
-    )) as DbFeedRow[];
+    const video = await this.prisma.videoPost.findFirst({
+      where: { id, status: 'ACTIVE' },
+    });
+    if (!video) return null;
+    const [item] = await this.hydrateFeed([video], userId);
+    return item ?? null;
+  }
 
-    if (rows.length === 0) return null;
-    return toFeedItem(rows[0]);
+  /**
+   * Shared post-fetch step: turn the bare videos into FeedItems by looking up
+   * the author/product/shop names and the viewer's like state in a single
+   * round-trip each. Kept here so feed() and byId() stay tiny.
+   */
+  private async hydrateFeed(
+    videos: Array<{
+      id: string;
+      authorId: string;
+      productId: string | null;
+      shopId: string | null;
+      videoUrl: string;
+      thumbUrl: string | null;
+      caption: string;
+      tagsJson: string;
+      likes: number;
+      views: number;
+      comments: number;
+      status: string;
+      score: number;
+      createdAt: Date;
+      updatedAt: Date;
+    }>,
+    userId: string | null,
+  ): Promise<VideoFeedItem[]> {
+    if (videos.length === 0) return [];
+
+    const authorIds = Array.from(new Set(videos.map((v) => v.authorId)));
+    const productIds = Array.from(
+      new Set(videos.map((v) => v.productId).filter((x): x is string => !!x)),
+    );
+    const shopIds = Array.from(
+      new Set(videos.map((v) => v.shopId).filter((x): x is string => !!x)),
+    );
+
+    const [authors, products, shops, likedRows] = await Promise.all([
+      authorIds.length
+        ? this.prisma.user.findMany({
+            where: { id: { in: authorIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([] as Array<{ id: string; name: string | null }>),
+      productIds.length
+        ? this.prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, name: true, priceCents: true },
+          })
+        : Promise.resolve([] as Array<{ id: string; name: string; priceCents: number }>),
+      shopIds.length
+        ? this.prisma.shop.findMany({
+            where: { id: { in: shopIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([] as Array<{ id: string; name: string }>),
+      userId
+        ? this.prisma.videoReaction.findMany({
+            where: {
+              userId,
+              kind: 'LIKE',
+              videoId: { in: videos.map((v) => v.id) },
+            },
+            select: { videoId: true },
+          })
+        : Promise.resolve([] as Array<{ videoId: string }>),
+    ]);
+
+    const authorMap = new Map(authors.map((a) => [a.id, a.name]));
+    const productMap = new Map(products.map((p) => [p.id, p]));
+    const shopMap = new Map(shops.map((s) => [s.id, s.name]));
+    const likedSet = new Set(likedRows.map((r) => r.videoId));
+
+    return videos.map((v): VideoFeedItem => {
+      const product = v.productId ? productMap.get(v.productId) : undefined;
+      return toFeedItem({
+        ...v,
+        createdAt:
+          v.createdAt instanceof Date ? v.createdAt.toISOString() : v.createdAt,
+        updatedAt:
+          v.updatedAt instanceof Date ? v.updatedAt.toISOString() : v.updatedAt,
+        authorName: authorMap.get(v.authorId) ?? null,
+        productName: product?.name ?? null,
+        productPriceCents: product?.priceCents ?? null,
+        shopName: v.shopId ? shopMap.get(v.shopId) ?? null : null,
+        liked: likedSet.has(v.id) ? 1 : null,
+      });
+    });
   }
 
   // =============================================================================
