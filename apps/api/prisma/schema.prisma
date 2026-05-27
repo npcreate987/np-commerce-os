@@ -810,3 +810,31 @@ model InAppMessage {
   @@index([userId, read, createdAt])
   @@map("inapp_messages")
 }
+
+// =============================================================================
+// Phase 19.3 — OTA manifest persistence
+// =============================================================================
+
+/// Capacitor Live Updates manifest override — persisted version of
+/// `LiveUpdatesCacheService`. Webhook writes here so the manifest
+/// survives API restarts/redeploys (in-memory cache alone was wiped
+/// every time Railway redeployed → OTA "ตายชั่วคราว").
+///
+/// One row per channel; channel is the PK so upsert-by-channel is
+/// the natural write pattern. The service still keeps an in-memory
+/// mirror for fast reads (rehydrated from this table on boot).
+model LiveUpdateManifest {
+  /// "production" | "beta" — keyed separately so canary doesn't leak into prod
+  channel          String   @id
+  version          String
+  buildId          String
+  url              String
+  checksum         String
+  size             Int
+  rolloutPct       Int      @default(100)
+  /// optional — falls back to LIVE_UPDATES_MIN_NATIVE_VERSION env if null
+  minNativeVersion String?
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@map("live_update_manifests")
+}

@@ -223,12 +223,12 @@ export class LiveUpdatesController {
    */
   @Post('webhook')
   @HttpCode(200)
-  webhook(
+  async webhook(
     @Req() req: { rawBody?: string | Buffer },
     @Headers('x-np-signature') signature: string | undefined,
     @Body(new ZodValidationPipe(liveUpdateWebhookSchema))
     body: LiveUpdateWebhookPayload,
-  ): { ok: true; applied: string; channel: string; updatedAt: string } {
+  ): Promise<{ ok: true; applied: string; channel: string; updatedAt: string }> {
     const secret = process.env.LIVE_UPDATES_WEBHOOK_SECRET;
     if (!secret) {
       this.log.error('LIVE_UPDATES_WEBHOOK_SECRET not configured — refusing webhook');
@@ -251,7 +251,11 @@ export class LiveUpdatesController {
       throw new UnauthorizedException('Invalid HMAC signature');
     }
 
-    const applied = this.cache.update({
+    // Phase 19.3 — `update()` is now async (writes to Postgres before
+    // memory). Awaiting keeps the webhook semantically "persisted before
+    // 200" — if the DB write throws, the caller gets a 500 instead of
+    // a false-positive ack.
+    const applied = await this.cache.update({
       channel: body.channel,
       version: body.version,
       buildId: body.buildId,
