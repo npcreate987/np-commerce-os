@@ -23,7 +23,7 @@
  *   runs in-process — fine up to ~1M weekly active users on commodity HW.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   TasteProfileSummary,
@@ -95,6 +95,7 @@ interface DbProfileRow {
 export class TasteService {
   // In-process queue of userIds awaiting rebuild. TasteWorker drains it.
   private readonly queue = new Set<string>();
+  private readonly logger = new Logger(TasteService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -130,14 +131,34 @@ export class TasteService {
   // ────────────────────────────────────────────────────────────────────
 
   async get(userId: string): Promise<UserTasteProfile | null> {
-    const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT userId, shopAffinityJson, tagAffinityJson,
-              priceMedianCents, priceStdCents,
-              recentItemIdsJson, boughtItemIdsJson,
-              eventCount, windowDays, generation, lastUpdatedAt
-       FROM user_profiles WHERE userId = ? LIMIT 1`,
-      userId,
-    )) as DbProfileRow[];
+    // Phase 19.5 — `user_profiles` is provisioned by bootstrap-phase10-2.ts
+    // which is gated by SKIP_BOOTSTRAP_MIGRATIONS=true on Postgres (it uses
+    // SQLite-shaped DDL). The raw SQL below also uses `?` placeholders +
+    // unquoted camelCase columns, which Postgres rejects. Result: every
+    // authenticated /recommendations/for-you call would 500.
+    //
+    // Failing soft here returns null → `_forYou2` falls back to the legacy
+    // popularity-blended `_forYou` path, which IS ported and works on
+    // Postgres. The full port (Postgres schema + Prisma-client read) is
+    // tracked in Phase 19.6.
+    let rows: DbProfileRow[];
+    try {
+      rows = (await this.prisma.$queryRawUnsafe(
+        `SELECT userId, shopAffinityJson, tagAffinityJson,
+                priceMedianCents, priceStdCents,
+                recentItemIdsJson, boughtItemIdsJson,
+                eventCount, windowDays, generation, lastUpdatedAt
+         FROM user_profiles WHERE userId = ? LIMIT 1`,
+        userId,
+      )) as DbProfileRow[];
+    } catch (e) {
+      this.logger.warn(
+        `taste.get: degraded to cold-start (table likely missing on Postgres): ${
+          e instanceof Error ? e.message.slice(0, 200) : 'unknown'
+        }`,
+      );
+      return null;
+    }
     const row = rows[0];
     if (!row) return null;
     return {
