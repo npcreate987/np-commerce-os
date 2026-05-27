@@ -277,6 +277,9 @@ export const api = {
       request<Payment>('POST', '/payments', { token, body: input }),
     confirmMock: (token: string, orderId: string) =>
       request<Payment>('POST', `/payments/mock/confirm/${orderId}`, { token }),
+    // Phase 20.1 — polling endpoint for the PromptPay sheet.
+    byOrder: (token: string, orderId: string) =>
+      request<Payment>('GET', `/payments/by-order/${orderId}`, { token }),
   },
 
   // Phase 2 — Trust & Logistics

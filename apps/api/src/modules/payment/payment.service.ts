@@ -207,6 +207,27 @@ export class PaymentService {
   }
 
   /**
+   * Phase 20.1 — polling helper for the FE PromptPay sheet.
+   *
+   * Returns the latest payment row for an order so the customer's browser
+   * can see status transition PENDING → SUCCEEDED in (near) real time.
+   * Authorisation: caller must own the order. Anyone else gets 403 to
+   * avoid leaking that an order exists (we 404 before 403 only when the
+   * order genuinely doesn't exist — so an attacker can't probe IDs).
+   */
+  async getByOrder(userId: string, orderId: string): Promise<Payment> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { customerId: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.customerId !== userId) throw new ForbiddenException('Not your order');
+    const payment = await this.prisma.payment.findUnique({ where: { orderId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    return this.toPayment(payment);
+  }
+
+  /**
    * Dev-only direct settlement entry point. Kept for compatibility with the
    * existing `POST /v1/payments/mock/confirm/:orderId` route used by E2E tests
    * and the FE checkout-success simulator.

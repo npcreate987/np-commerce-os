@@ -30,12 +30,12 @@ import {
   ClockIcon,
   MapPinIcon,
   MessageIcon,
-  QrIcon,
   ShieldCheckIcon,
   TruckIcon,
 } from '@/components/icons';
 import { cn } from '@/lib/cn';
 import { StarPicker, StarRating } from '@/components/rating';
+import { PromptPaySheet } from '@/components/payment/promptpay-sheet';
 import { ORDER_STATUS } from '../_list-panel';
 
 const SHIP_TIMELINE = [
@@ -78,13 +78,8 @@ export function OrderDetailPanel({ orderId }: { orderId: string }): JSX.Element 
     retry: false,
   });
 
-  const pay = useMutation({
-    mutationFn: () => {
-      if (!token) throw new Error('LOGIN_REQUIRED');
-      return api.payments.confirmMock(token, orderId);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['order', orderId] }),
-  });
+  // Phase 20.1 — payment mutation lives inside <PromptPaySheet/> now;
+  // it owns both the polling AND the dev-mode mock-confirm button.
 
   const advance = useMutation({
     mutationFn: () => {
@@ -326,18 +321,22 @@ export function OrderDetailPanel({ orderId }: { orderId: string }): JSX.Element 
         </p>
       </section>
 
+      {/* ----- PromptPay QR sheet ---- */}
+      {/* Phase 20.1 — Render the QR (+ live polling) while we wait for the bank
+          webhook. The sheet hides itself once the payment row flips to
+          SUCCEEDED, at which point the order also flips to PAID via the
+          invalidate hook inside the sheet. */}
+      {order.status === 'PENDING_PAYMENT' && (
+        <PromptPaySheet orderId={orderId} totalCents={order.totalCents} />
+      )}
+
       {/* ----- Actions ---- */}
       <div className="grid gap-2">
-        {order.status === 'PENDING_PAYMENT' && (
-          <Button
-            fullWidth
-            onClick={() => pay.mutate()}
-            loading={pay.isPending}
-            leftIcon={<QrIcon className="h-4 w-4" />}
-          >
-            จำลองการชำระเงิน (mock)
-          </Button>
-        )}
+        {/*
+          The old single-click "จำลองการชำระเงิน (mock)" button has been
+          subsumed into <PromptPaySheet/> so dev / CI / staging users
+          still get a one-tap confirm next to the QR they're scanning.
+        */}
         {canConfirm && (
           <Button
             fullWidth

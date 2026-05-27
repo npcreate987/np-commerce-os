@@ -45,6 +45,26 @@ export class PaymentController {
   }
 
   /**
+   * Phase 20.1 — Polling endpoint for the FE PromptPay sheet.
+   *
+   * Returns the current payment row for an order owned by the caller.
+   * The FE hits this every ~3 s while the QR is on screen and stops
+   * polling on `status === 'SUCCEEDED' | 'FAILED'`.
+   *
+   * Light throttle: 60 req/min/user is generous (default poll is 20/min)
+   * but blocks a runaway loop from a buggy client.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ windowSec: 60, max: 60 })
+  @Get('by-order/:orderId')
+  byOrder(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orderId') orderId: string,
+  ): Promise<Payment> {
+    return this.payments.getByOrder(user.userId, orderId);
+  }
+
+  /**
    * MOCK confirm — kept for dev/CI; production traffic settles via
    * the webhook below.
    */
