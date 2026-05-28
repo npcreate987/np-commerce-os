@@ -236,13 +236,17 @@ export async function hideNativeSplash(): Promise<void> {
  * Listen to deep-link openings (Universal Links / App Links / custom scheme)
  * and forward the parsed URL to a router push callback.
  *
+ * Signature: `push(path, fullUrl)` — the second argument is the raw URL so
+ * callers can branch on custom schemes (e.g. `npcommerce://login-success`)
+ * before falling back to a router navigation.
+ *
  * Example wiring from layout.tsx:
  *   wireDeepLinks((path) => router.push(path));
  *
  * Returns a cleanup function.
  */
 export async function wireDeepLinks(
-  push: (path: string) => void,
+  push: (path: string, fullUrl: string) => void | Promise<void>,
 ): Promise<() => void> {
   if (!isNative()) return () => {};
   try {
@@ -251,7 +255,7 @@ export async function wireDeepLinks(
       try {
         const url = new URL(event.url);
         const path = `${url.pathname}${url.search}${url.hash}`;
-        if (path) push(path || '/');
+        void push(path || '/', event.url);
       } catch {
         /* malformed URL — ignore */
       }

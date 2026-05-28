@@ -23,8 +23,31 @@
  *                       previews.
  */
 import { env } from './env';
+import { isNative, openExternalUrl } from './native';
 
 import type { Liff } from '@line/liff';
+
+/**
+ * Phase 21.1 — Capacitor LIFF bounce URL.
+ *
+ * In a Capacitor WebView the current origin is `https://localhost` (Android
+ * scheme) or `capacitor://localhost` (iOS). LINE rejects both as
+ * `redirect_uri` so the LIFF SDK can't run end-to-end inside the WebView.
+ *
+ * Workaround:
+ *   1. We open the production web /login URL in an external Chrome Custom
+ *      Tab (`@capacitor/browser`) with `?source=capacitor`.
+ *   2. That page runs the standard LIFF flow (its origin matches the LIFF
+ *      Endpoint URL so LINE accepts it).
+ *   3. After getting our JWT, the page detects `?source=capacitor` and
+ *      navigates to `npcommerce://login-success?token=…&refresh=…&user=…`.
+ *   4. Android's intent filter routes that custom scheme back to the
+ *      Capacitor MainActivity, which `appUrlOpen` listener picks up and
+ *      writes the tokens into the auth store.
+ *
+ * Keep this constant in sync with the production web deployment.
+ */
+const CAPACITOR_BOUNCE_URL = 'https://np-commerce.pages.dev/login?source=capacitor';
 
 /**
  * Custom error class so consumers don't depend on SDK-internal error
@@ -117,6 +140,27 @@ export async function getLiff(): Promise<Liff> {
 export async function liffLogin(opts: {
   redirectUri?: string;
 } = {}): Promise<string> {
+  // Capacitor escape hatch — see CAPACITOR_BOUNCE_URL doc comment above.
+  // We avoid `liff.init` entirely because the LIFF SDK sets `redirect_uri`
+  // to the current origin (`https://localhost`) which LINE rejects.
+  if (isNative()) {
+    if (!env.lineLiffId) {
+      throw new LiffError(
+        'NOT_CONFIGURED',
+        'NEXT_PUBLIC_LINE_LIFF_ID is not set',
+      );
+    }
+    await openExternalUrl(CAPACITOR_BOUNCE_URL);
+    // The Custom Tab now owns the auth flow; the rest of the journey
+    // happens via the `npcommerce://login-success` deep link handled by
+    // `NativeBridge`. We throw the same code as the web "redirect kicked
+    // off" branch so the caller's spinner stays up.
+    throw new LiffError(
+      'LOGIN_REQUIRED',
+      'Redirecting to LINE login via in-app browser…',
+    );
+  }
+
   const liff = await getLiff();
 
   if (!liff.isLoggedIn()) {

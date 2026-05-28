@@ -82,6 +82,9 @@ function LineHero({
   const setAuth = useAuthStore((s) => s.setAuth);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Re-read query params here so the closure inside completeLineLogin
+  // can detect `?source=capacitor` without an extra prop drill.
+  const sp = useSearchParams();
 
   // When LIFF redirects the user back from access.line.me, we land on
   // /login again. Auto-detect the active LIFF session and complete the
@@ -152,6 +155,30 @@ function LineHero({
         window.sessionStorage.removeItem(NEXT_STORAGE_KEY);
       }
       const target = nextParam ?? storedNext ?? '/feed';
+
+      // Phase 21.1 — Capacitor bounce-back.
+      //
+      // When the LIFF flow was kicked off from the native APK, the user is
+      // currently inside a Chrome Custom Tab on Cloudflare Pages. We hand
+      // the tokens back to the host app via the `npcommerce://` custom
+      // scheme intent registered in AndroidManifest. The Capacitor
+      // `appUrlOpen` listener (in `NativeBridge`) writes them into the
+      // auth store and routes to /feed. We leave this tab in a stale
+      // state — the OS will close it when the user pops back to the app.
+      const isFromCapacitor = sp.get('source') === 'capacitor';
+      if (isFromCapacitor && typeof window !== 'undefined') {
+        const params = new URLSearchParams({
+          token: res.accessToken,
+          // refreshToken is opaque to the JS bundle (we receive it via
+          // httpOnly cookie on the API response). If we ever surface it
+          // in `res` we'd add it here too.
+          userId: res.user.id,
+          target,
+        });
+        window.location.href = `npcommerce://login-success?${params.toString()}`;
+        return;
+      }
+
       router.push(target);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : toFriendly(err));
