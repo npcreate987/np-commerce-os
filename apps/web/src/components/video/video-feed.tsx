@@ -526,13 +526,14 @@ export function VideoFeed({
                       • 10-px labels (was 11 px) with gap-0.5 hugging the
                         button to keep each "row" visually tight
 
-                    Phase 20.7 — rail bottom anchors 4 px above the 48-px
-                    black bottom nav. The offset = nav-height (3rem) +
-                    tiny breathing room (0.25rem) + safe-area inset.   */}
+                    Phase 20.8 — rail lifted 16 px so the bottom-most icon
+                    ("เพิ่มเติม") clears the product CTA pill cleanly. The
+                    offset = nav-height (3rem) + breathing room (1.25rem) +
+                    safe-area inset.                                    */}
                 <div
                   className="absolute right-2 z-20 flex flex-col items-center gap-2.5"
                   style={{
-                    bottom: 'calc(env(safe-area-inset-bottom) + 3.25rem)',
+                    bottom: 'calc(env(safe-area-inset-bottom) + 4.25rem)',
                   }}
                 >
                   {/* Creator avatar with + follow */}
