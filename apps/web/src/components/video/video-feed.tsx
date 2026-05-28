@@ -526,13 +526,13 @@ export function VideoFeed({
                       • 10-px labels (was 11 px) with gap-0.5 hugging the
                         button to keep each "row" visually tight
 
-                    Phase 20.6 — rail bottom anchors 4 px above the 40-px
-                    black bottom nav. The offset = nav-height (2.5rem) +
+                    Phase 20.7 — rail bottom anchors 4 px above the 48-px
+                    black bottom nav. The offset = nav-height (3rem) +
                     tiny breathing room (0.25rem) + safe-area inset.   */}
                 <div
                   className="absolute right-2 z-20 flex flex-col items-center gap-2.5"
                   style={{
-                    bottom: 'calc(env(safe-area-inset-bottom) + 2.75rem)',
+                    bottom: 'calc(env(safe-area-inset-bottom) + 3.25rem)',
                   }}
                 >
                   {/* Creator avatar with + follow */}
@@ -678,7 +678,7 @@ export function VideoFeed({
                 <div
                   className="absolute inset-x-0 bottom-0 z-10 px-4 pb-5 pr-20"
                   style={{
-                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 3.25rem)',
+                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 3.75rem)',
                   }}
                 >
                   <div className="space-y-2">

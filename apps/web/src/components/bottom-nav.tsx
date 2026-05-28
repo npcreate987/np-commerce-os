@@ -217,7 +217,7 @@ function NavTab({
     >
       <span
         className={cn(
-          'relative inline-flex h-5 w-5 items-center justify-center transition',
+          'relative inline-flex h-6 w-6 items-center justify-center transition',
           active
             ? overlay
               ? 'text-white'
@@ -228,7 +228,7 @@ function NavTab({
         )}
       >
         <Icon
-          className={cn('h-5 w-5', active && 'drop-shadow')}
+          className={cn('h-6 w-6', active && 'drop-shadow')}
           // Bump stroke for active state to mimic a "filled" appearance.
           strokeWidth={active ? 2.6 : 2}
         />
