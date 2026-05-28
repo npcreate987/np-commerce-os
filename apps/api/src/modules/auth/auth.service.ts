@@ -58,6 +58,12 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    // Phase 21 — accounts created via LINE Login have no local password.
+    // Returning the same generic "invalid credentials" message keeps us
+    // from leaking which accounts exist as LINE-only.
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
     const ok = await argon2.verify(user.passwordHash, input.password);
     if (!ok) {
       throw new UnauthorizedException('Invalid email or password');
@@ -178,8 +184,11 @@ export class AuthService {
    * Issue a brand-new refresh token row.
    * Returns the inserted row id + the plaintext token (callers attach to
    * the AuthResponse — we never store the plaintext).
+   *
+   * Phase 21: made `public` so LineAuthService can issue refresh tokens
+   * after verifying a LINE id_token.
    */
-  private async issueRefreshToken(
+  async issueRefreshToken(
     userId: string,
   ): Promise<{ id: string; plaintext: string; expiresAt: Date }> {
     const plaintext = randomBytes(48).toString('base64url');
@@ -192,10 +201,16 @@ export class AuthService {
     return { id, plaintext, expiresAt };
   }
 
-  private toAuthResponse(
+  /**
+   * Phase 21: made `public` (was private) so LineAuthService can reuse it
+   * after verifying a LINE id_token + finding/creating the local User row.
+   *
+   * `email` is nullable since LINE Login may not grant the `email` scope.
+   */
+  toAuthResponse(
     user: {
       id: string;
-      email: string;
+      email: string | null;
       phone: string | null;
       name: string | null;
       role: string;

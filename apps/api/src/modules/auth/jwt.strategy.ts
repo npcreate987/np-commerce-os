@@ -6,7 +6,8 @@ import { AuthenticatedUser } from '../../common/decorators/current-user.decorato
 
 interface JwtPayload {
   sub: string;
-  email: string;
+  /// Nullable since Phase 21 — LINE-only accounts may not have an email.
+  email: string | null;
   role: UserRole;
 }
 

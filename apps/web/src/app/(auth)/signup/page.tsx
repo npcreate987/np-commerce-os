@@ -1,6 +1,13 @@
 'use client';
 
-import { FormEvent, useEffect, useState, Suspense } from 'react';
+/**
+ * Phase 21 — /signup is now a thin entry point. Customer onboarding flows
+ * through LINE Login (the backend find-or-creates the account on first
+ * sign-in), so /signup just redirects to /login + preserves `?ref=` and
+ * any other query params. Staff/merchant self-signup still has its
+ * dedicated email/password form via `/signup?staff=1`.
+ */
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
@@ -17,28 +24,70 @@ import {
   StoreIcon,
 } from '@/components/icons';
 import { cn } from '@/lib/cn';
+import { isLiffConfigured } from '@/lib/liff-client';
 
-function SignupPageInner(): JSX.Element {
+export default function SignupPage(): JSX.Element {
+  return (
+    <Suspense fallback={null}>
+      <SignupInner />
+    </Suspense>
+  );
+}
+
+function SignupInner(): JSX.Element {
   const router = useRouter();
   const params = useSearchParams();
+  const staffMode = params.get('staff') === '1';
+  const refFromQuery = params.get('ref');
+
+  // Persist referral code so the LINE-login completion step (in /login)
+  // can claim it after sign-in.
+  useEffect(() => {
+    if (!refFromQuery) return;
+    try {
+      localStorage.setItem('np-referral-code', refFromQuery.toUpperCase());
+    } catch {
+      // ignore — Safari private mode etc.
+    }
+  }, [refFromQuery]);
+
+  // Customer signup → bounce to /login (the LINE hero will provision
+  // the account on first sign-in). We preserve `?ref=` so the URL still
+  // tells the story; localStorage above is what actually drives the
+  // claim after the LIFF round-trip.
+  useEffect(() => {
+    if (staffMode || !isLiffConfigured()) return;
+    const qs = new URLSearchParams();
+    if (refFromQuery) qs.set('ref', refFromQuery);
+    const dest = qs.toString() ? `/login?${qs.toString()}` : '/login';
+    router.replace(dest);
+  }, [staffMode, refFromQuery, router]);
+
+  if (!staffMode && isLiffConfigured()) {
+    // Render nothing while the redirect above flushes — avoids a flash
+    // of the email form on the customer path.
+    return <></>;
+  }
+
+  return <StaffSignupForm refFromQuery={refFromQuery} />;
+}
+
+// =============================================================================
+// Staff / merchant self-signup form — unchanged from Phase 20 behaviour.
+// =============================================================================
+function StaffSignupForm({
+  refFromQuery,
+}: {
+  refFromQuery: string | null;
+}): JSX.Element {
+  const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'CUSTOMER' | 'MERCHANT'>('CUSTOMER');
+  const [role, setRole] = useState<'CUSTOMER' | 'MERCHANT'>('MERCHANT');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const refFromQuery = params.get('ref');
-  useEffect(() => {
-    if (refFromQuery) {
-      try {
-        localStorage.setItem('np-referral-code', refFromQuery.toUpperCase());
-      } catch {
-        // ignore
-      }
-    }
-  }, [refFromQuery]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -49,7 +98,6 @@ function SignupPageInner(): JSX.Element {
       setAuth({ user: res.user, token: res.accessToken });
       void tracker.identify(res.user.id, res.accessToken);
 
-      // Auto-claim referral if code present
       try {
         const code =
           refFromQuery?.toUpperCase() ?? localStorage.getItem('np-referral-code');
@@ -82,50 +130,42 @@ function SignupPageInner(): JSX.Element {
         <Link
           href="/"
           className="glass inline-flex h-10 w-10 items-center justify-center rounded-2xl text-ink-700 active:scale-95"
+          aria-label="กลับ"
         >
           <ChevronLeftIcon />
         </Link>
 
-        <section className="mt-8 animate-slide-up">
+        <div className="mt-8 flex flex-col items-center text-center">
           <h1 className="font-display text-3xl font-bold tracking-tightest text-ink-900">
-            สร้างบัญชีของคุณ
+            สมัครบัญชีพนักงาน
           </h1>
-          <p className="mt-1.5 text-sm text-ink-500">
-            เริ่มซื้อหรือขายของได้ในไม่กี่นาที
-          </p>
-        </section>
+          <p className="mt-1.5 text-sm text-ink-500">สำหรับร้านค้า / พนักงาน / ไรเดอร์</p>
+        </div>
 
-        <div className="mt-6">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-            ฉันต้องการ
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <RoleCard
-              icon={<BagIcon className="h-5 w-5" />}
-              title="ซื้อของ"
-              desc="ช้อปปิ้ง · ติดตามคำสั่งซื้อ"
-              active={role === 'CUSTOMER'}
-              onClick={() => setRole('CUSTOMER')}
-            />
-            <RoleCard
-              icon={<StoreIcon className="h-5 w-5" />}
-              title="ขายของ"
-              desc="เปิดร้าน · ลงสินค้า · รับออเดอร์"
-              active={role === 'MERCHANT'}
-              onClick={() => setRole('MERCHANT')}
-            />
-          </div>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <RoleCard
+            active={role === 'CUSTOMER'}
+            onClick={() => setRole('CUSTOMER')}
+            title="ลูกค้า"
+            icon={<BagIcon className="h-5 w-5" />}
+          />
+          <RoleCard
+            active={role === 'MERCHANT'}
+            onClick={() => setRole('MERCHANT')}
+            title="ร้านค้า"
+            icon={<StoreIcon className="h-5 w-5" />}
+          />
         </div>
 
         <form
           onSubmit={onSubmit}
-          className="glass-strong mt-6 space-y-4 rounded-4xl p-5 shadow-soft"
+          className="glass-strong animate-slide-up mt-6 space-y-4 rounded-4xl p-5 shadow-soft"
         >
           <Input
             label="ชื่อ"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={role === 'MERCHANT' ? 'ชื่อร้าน / ชื่อคุณ' : 'ชื่อของคุณ'}
+            placeholder="John Doe"
             required
           />
           <Input
@@ -145,7 +185,6 @@ function SignupPageInner(): JSX.Element {
             placeholder="อย่างน้อย 8 ตัวอักษร"
             minLength={8}
             autoComplete="new-password"
-            hint="ผสมตัวเลข + ตัวอักษร เพื่อความปลอดภัย"
             required
           />
 
@@ -168,7 +207,7 @@ function SignupPageInner(): JSX.Element {
 
         <p className="mt-6 text-center text-sm text-ink-600">
           มีบัญชีอยู่แล้ว?{' '}
-          <Link href="/login" className="font-semibold text-brand hover:text-brand-700">
+          <Link href="/login?staff=1" className="font-semibold text-brand hover:text-brand-700">
             เข้าสู่ระบบ
           </Link>
         </p>
@@ -177,58 +216,42 @@ function SignupPageInner(): JSX.Element {
   );
 }
 
-export default function SignupPage(): JSX.Element {
-  return (
-    <Suspense fallback={null}>
-      <SignupPageInner />
-    </Suspense>
-  );
-}
-
 function RoleCard({
-  icon,
-  title,
-  desc,
   active,
   onClick,
+  title,
+  icon,
 }: {
-  icon: JSX.Element;
-  title: string;
-  desc: string;
   active: boolean;
   onClick: () => void;
+  title: string;
+  icon: React.ReactNode;
 }): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'relative overflow-hidden rounded-3xl border p-4 text-left transition active:scale-[0.985]',
+        'relative flex flex-col items-start gap-2 rounded-3xl border p-4 text-left transition active:scale-[0.985]',
         active
-          ? 'border-transparent bg-gradient-to-br from-brand to-brand-400 text-white shadow-glow'
-          : 'border-ink-100 bg-white/85 backdrop-blur hover:border-ink-200',
+          ? 'border-brand bg-brand/5 shadow-soft'
+          : 'border-ink-100 bg-white/70 backdrop-blur',
       )}
     >
+      <span
+        className={cn(
+          'flex h-9 w-9 items-center justify-center rounded-2xl',
+          active ? 'bg-brand text-white' : 'bg-ink-100 text-ink-700',
+        )}
+      >
+        {icon}
+      </span>
+      <span className="font-semibold text-ink-900">{title}</span>
       {active ? (
-        <span className="absolute inset-0 bg-noise opacity-25 mix-blend-overlay" aria-hidden />
+        <span className="absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white">
+          <CheckIcon className="h-3 w-3" />
+        </span>
       ) : null}
-      <div className="relative flex items-center justify-between">
-        <div
-          className={cn(
-            'flex h-10 w-10 items-center justify-center rounded-2xl',
-            active ? 'bg-white/20 ring-1 ring-white/30 backdrop-blur' : 'bg-ink-50 text-ink-700',
-          )}
-        >
-          {icon}
-        </div>
-        {active ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-brand">
-            <CheckIcon className="h-3.5 w-3.5" />
-          </span>
-        ) : null}
-      </div>
-      <p className={cn('relative mt-3 font-display text-base font-bold tracking-tight', active ? 'text-white' : 'text-ink-900')}>{title}</p>
-      <p className={cn('relative mt-0.5 text-[11px] leading-snug', active ? 'text-white/85' : 'text-ink-500')}>{desc}</p>
     </button>
   );
 }

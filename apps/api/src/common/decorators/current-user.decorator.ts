@@ -3,7 +3,8 @@ import { UserRole } from '../../shared/types';
 
 export interface AuthenticatedUser {
   userId: string;
-  email: string;
+  /// Nullable since Phase 21 — LINE-only accounts may not have an email.
+  email: string | null;
   role: UserRole;
 }
 

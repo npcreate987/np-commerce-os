@@ -29,14 +29,27 @@ datasource db {
 
 model User {
   id           String   @id @default(cuid())
-  email        String   @unique
+  /// Nullable since Phase 21 — LINE accounts may not grant email scope.
+  /// Unique constraint still applies, but Postgres allows multiple NULLs.
+  email        String?  @unique
   phone        String?  @unique
   name         String?
-  passwordHash String
+  /// Nullable since Phase 21 — LINE accounts have no password.
+  passwordHash String?
   /// "CUSTOMER" | "MERCHANT" | "ADMIN"
   role         String   @default("CUSTOMER")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  /// Phase 21 — LINE Login fields.
+  /// "EMAIL" (default) | "LINE" — set on first signup, immutable afterwards.
+  authProvider    String  @default("EMAIL")
+  /// LINE user ID (`sub` claim from id_token). Globally unique per channel.
+  lineUserId      String? @unique
+  /// Snapshot of LINE display name at last login (auto-synced on every sign-in).
+  lineDisplayName String?
+  /// Snapshot of LINE profile picture URL at last login.
+  linePictureUrl  String?
 
   /// Phase 17 — soft-delete + 30-day grace period
   /// When set, the account is "deletion-pending" — login is blocked,
@@ -53,6 +66,7 @@ model User {
   addresses Address[]
 
   @@index([email])
+  @@index([lineUserId])
   @@index([deletionPurgeAt])
   @@map("users")
 }
@@ -914,19 +928,19 @@ model PaymentWebhookEvent {
 /// run on Postgres). User-initiated reports flow: PENDING → admin reviews →
 /// RESOLVED with disposition ('KEEP' | 'HIDE' | 'DELETE').
 model VideoReport {
-  id          String    @id
-  videoId     String
-  reporterId  String
+  id         String    @id
+  videoId    String
+  reporterId String
   /// "SPAM" | "INAPPROPRIATE" | "MISINFO" | "OTHER" — enforced at zod boundary
-  reason      String
-  note        String?
+  reason     String
+  note       String?
   /// "PENDING" | "RESOLVED"
-  status      String    @default("PENDING")
-  resolvedBy  String?
-  resolvedAt  DateTime?
+  status     String    @default("PENDING")
+  resolvedBy String?
+  resolvedAt DateTime?
   /// "KEEP" | "HIDE" | "DELETE"
-  resolution  String?
-  createdAt   DateTime  @default(now())
+  resolution String?
+  createdAt  DateTime  @default(now())
 
   @@index([videoId, createdAt])
   @@index([status, createdAt])

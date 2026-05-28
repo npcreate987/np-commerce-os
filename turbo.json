@@ -5,7 +5,10 @@
     "DATABASE_URL",
     "REDIS_URL",
     "JWT_SECRET",
-    "NEXT_PUBLIC_API_URL"
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_LINE_LIFF_ID",
+    "LINE_LOGIN_CHANNEL_ID",
+    "LINE_LOGIN_CHANNEL_SECRET"
   ],
   "tasks": {
     "build": {

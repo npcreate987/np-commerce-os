@@ -45,6 +45,7 @@
     "@capacitor/status-bar": "^6.0.0",
     "@capgo/capacitor-updater": "6",
     "@ducanh2912/next-pwa": "^10.2.9",
+    "@line/liff": "^2.29.0",
     "@np/types": "workspace:*",
     "@sentry/capacitor": "4.0.0",
     "@sentry/nextjs": "10.43.0",

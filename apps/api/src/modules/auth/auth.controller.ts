@@ -1,10 +1,19 @@
 import { Body, Controller, Get, Post, UseGuards, UsePipes } from '@nestjs/common';
-import { AuthResponse, LoginInput, SignupInput, loginSchema, signupSchema } from '../../shared/types';
+import {
+  AuthResponse,
+  LineLoginInput,
+  LoginInput,
+  SignupInput,
+  lineLoginSchema,
+  loginSchema,
+  signupSchema,
+} from '../../shared/types';
 import { ZodValidationPipe } from '../../common/zod/zod-validation.pipe';
 import { AuthenticatedUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Throttle } from '../../common/throttle/throttler';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
+import { LineAuthService } from './line-auth.service';
 import { z } from 'zod';
 
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(400) });
@@ -12,7 +21,10 @@ type RefreshInput = z.infer<typeof refreshSchema>;
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly lineAuth: LineAuthService,
+  ) {}
 
   // Phase 13.3a — 5 signups / minute per IP. Tight enough that automated
   // account farming is impractical, loose enough that 4 family members
@@ -41,6 +53,17 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(refreshSchema))
   refresh(@Body() body: RefreshInput): Promise<AuthResponse> {
     return this.auth.refreshAccessToken(body.refreshToken);
+  }
+
+  // Phase 21 — LINE Login. Client passes the `idToken` it got from LIFF
+  // (`liff.getIDToken()`); we verify it with LINE then issue our usual
+  // session. 20/min/IP is plenty for honest retries while still blocking
+  // brute-force scans on the verify endpoint.
+  @Post('line')
+  @Throttle({ windowSec: 60, max: 20 })
+  @UsePipes(new ZodValidationPipe(lineLoginSchema))
+  line(@Body() body: LineLoginInput): Promise<AuthResponse> {
+    return this.lineAuth.login(body);
   }
 
   @UseGuards(JwtAuthGuard)

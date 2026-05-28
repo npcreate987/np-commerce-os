@@ -226,6 +226,10 @@ export const api = {
   auth: {
     signup: (input: SignupInput) => request<AuthResponse>('POST', '/auth/signup', { body: input }),
     login: (input: LoginInput) => request<AuthResponse>('POST', '/auth/login', { body: input }),
+    // Phase 21 — LINE Login. Frontend passes the id_token from LIFF;
+    // backend verifies it with LINE then issues our usual AuthResponse.
+    line: (input: { idToken: string; nonce?: string }) =>
+      request<AuthResponse>('POST', '/auth/line', { body: input }),
     me: (token: string) => request<User>('GET', '/users/me', { token }),
   },
 

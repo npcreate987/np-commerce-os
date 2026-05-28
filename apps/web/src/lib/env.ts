@@ -54,4 +54,12 @@ export const env = {
   //   2. อัปเดต GitHub Actions URL → /v1/app/live-updates/webhook
   //   3. เปลี่ยน apiPrefix กลับเป็น '/v1'
   apiPrefix: '',
+  /**
+   * Phase 21 — LIFF ID for LINE Login. Exposed to the client via
+   * NEXT_PUBLIC_LINE_LIFF_ID so `liff.init({ liffId })` works in both the
+   * static export (Capacitor APK) and the Pages Functions PWA build.
+   * Falsy → LINE Login UI is hidden and we silently fall back to the
+   * email/password staff form.
+   */
+  lineLiffId: process.env.NEXT_PUBLIC_LINE_LIFF_ID ?? '',
 };

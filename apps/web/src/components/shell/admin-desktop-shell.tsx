@@ -99,7 +99,7 @@ export function AdminDesktopShell({ children }: { children: ReactNode }): JSX.El
             <div className="space-y-2">
               <div className="flex items-center gap-2 rounded-xl bg-ink-50 p-2">
                 <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-white">
-                  {(user.name?.[0] || user.email[0] || '?').toUpperCase()}
+                  {(user.name?.[0] || user.email?.[0] || '?').toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-ink-900">
