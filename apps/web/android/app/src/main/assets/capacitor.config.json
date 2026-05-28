@@ -64,6 +64,16 @@
 			"updateUrl": "",
 			"channelUrl": "",
 			"statsUrl": ""
+		},
+		"GoogleAuth": {
+			"clientId": "",
+			"scopes": [
+				"profile",
+				"email",
+				"openid"
+			],
+			"grantOfflineAccess": false,
+			"forceCodeForRefreshToken": false
 		}
 	}
 }

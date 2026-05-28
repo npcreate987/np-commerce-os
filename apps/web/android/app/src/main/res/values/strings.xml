@@ -4,4 +4,5 @@
     <string name="title_activity_main">TuKTuK</string>
     <string name="package_name">app.np.commerce</string>
     <string name="custom_url_scheme">app.np.commerce</string>
+    <string name="server_client_id">334919791355-s6mjfmmhdvhdbua8p4k22a8iavd5nkkf.apps.googleusercontent.com</string>
 </resources>

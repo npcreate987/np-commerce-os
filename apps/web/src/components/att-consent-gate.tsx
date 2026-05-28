@@ -124,7 +124,7 @@ export function AttConsentGate(): JSX.Element | null {
         <p className="mt-2 text-sm text-surface-muted">
           TuKTuK ใช้ข้อมูลการใช้งานของคุณ (เช่น สินค้าที่คุณดู
           ค้นหา ซื้อ) เพื่อแนะนำสินค้าและเนื้อหาที่น่าจะตรงใจ
-          ปิดได้ทุกเมื่อในหน้า "ความเป็นส่วนตัว"
+          ปิดได้ทุกเมื่อในหน้า &ldquo;ความเป็นส่วนตัว&rdquo;
         </p>
         <ul className="mt-3 space-y-1.5 text-[12px] text-surface-muted">
           <li className="flex gap-1.5">
@@ -149,7 +149,7 @@ export function AttConsentGate(): JSX.Element | null {
           </Button>
         </div>
         <p className="mt-3 text-center text-[10px] text-surface-faint">
-          หลังกด "อนุญาต" iOS จะถามอีกครั้ง — นั่นคือป๊อปอัปของ Apple
+          หลังกด &ldquo;อนุญาต&rdquo; iOS จะถามอีกครั้ง — นั่นคือป๊อปอัปของ Apple
         </p>
       </div>
     </div>

@@ -20,12 +20,12 @@
             </intent-filter>
 
             <!--
-                Phase 16 — Android App Links (autoVerify=true)
-                ก่อนเปิดใช้งานจริง ต้อง:
-                  1) Replace "np.app" ด้วยโดเมน production
-                  2) วาง /.well-known/assetlinks.json ที่โดเมนนั้น ผ่าน HTTPS
-                     พร้อม SHA-256 ของ Play App Signing fingerprint
-                  3) Build APK/AAB แล้ว Play Console จะ verify อัตโนมัติ
+                Phase 21.2 — Android App Links (autoVerify=true)
+                Domain: tuk-tuk.mobi (production)
+                Required for full App Links activation:
+                  1) Host /.well-known/assetlinks.json at https://tuk-tuk.mobi
+                     with SHA-256 of Play App Signing fingerprint
+                  2) Build APK/AAB — Play Console verifies on install
                 Documentation:
                   https://developer.android.com/training/app-links/verify-android-applinks
             -->
@@ -34,8 +34,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
-                <data android:host="np.app" />
-                <data android:host="app.np.app" />
+                <data android:host="tuk-tuk.mobi" />
+                <data android:host="www.tuk-tuk.mobi" />
             </intent-filter>
 
             <!-- Custom URL scheme สำหรับ OAuth redirect / partner share -->

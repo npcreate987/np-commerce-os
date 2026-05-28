@@ -38,5 +38,8 @@ project(':capacitor-status-bar').projectDir = new File('../../../node_modules/.p
 include ':capgo-capacitor-updater'
 project(':capgo-capacitor-updater').projectDir = new File('../../../node_modules/.pnpm/@capgo+capacitor-updater@6.45.10_@capacitor+core@6.2.1/node_modules/@capgo/capacitor-updater/android')
 
+include ':codetrix-studio-capacitor-google-auth'
+project(':codetrix-studio-capacitor-google-auth').projectDir = new File('../../../node_modules/.pnpm/@codetrix-studio+capacitor-google-auth@3.4.0-rc.4_@capacitor+core@6.2.1/node_modules/@codetrix-studio/capacitor-google-auth/android')
+
 include ':sentry-capacitor'
 project(':sentry-capacitor').projectDir = new File('../../../node_modules/.pnpm/@sentry+capacitor@4.0.0_@capacitor+core@6.2.1_@sentry+react@10.43.0_react@18.3.1_/node_modules/@sentry/capacitor/android')
