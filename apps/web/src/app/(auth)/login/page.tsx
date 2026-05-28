@@ -34,6 +34,11 @@ import { Input } from '@/components/ui/input';
 import { Orb } from '@/components/ui/glass';
 import { ArrowRightIcon, ChevronLeftIcon, SparklesIcon } from '@/components/icons';
 import { isLiffConfigured, liffLogin, LiffError } from '@/lib/liff-client';
+import {
+  GoogleAuthError,
+  googleSignIn,
+  isGoogleConfigured,
+} from '@/lib/google-client';
 
 const NEXT_STORAGE_KEY = 'np-auth.line-login.next';
 
@@ -53,15 +58,32 @@ function LoginInner(): JSX.Element {
   const nextParam = sp.get('next');
   const staffMode = sp.get('staff') === '1' || isStaffNext(nextParam);
   const liffConfigured = isLiffConfigured();
+  const googleConfigured = isGoogleConfigured();
+  const socialConfigured = liffConfigured || googleConfigured;
 
-  // If LIFF isn't configured we silently demote to the staff form even
-  // without the `?staff=1` flag — preview builds need to keep working.
-  const showLineHero = liffConfigured && !staffMode;
+  // If no social provider is configured we silently demote to the staff
+  // form — preview builds without LIFF/Google secrets need to keep
+  // working.
+  const showSocialHero = socialConfigured && !staffMode;
 
-  if (showLineHero) {
-    return <LineHero nextParam={nextParam} router={router} />;
+  if (showSocialHero) {
+    return (
+      <SocialHero
+        nextParam={nextParam}
+        router={router}
+        liffConfigured={liffConfigured}
+        googleConfigured={googleConfigured}
+      />
+    );
   }
-  return <StaffForm nextParam={nextParam} router={router} liffConfigured={liffConfigured} />;
+  return (
+    <StaffForm
+      nextParam={nextParam}
+      router={router}
+      liffConfigured={liffConfigured}
+      googleConfigured={googleConfigured}
+    />
+  );
 }
 
 function isStaffNext(next: string | null): boolean {
@@ -70,48 +92,44 @@ function isStaffNext(next: string | null): boolean {
 }
 
 // =============================================================================
-// LINE hero — the default customer view
+// Social hero — the default customer view (LINE + Google)
 // =============================================================================
-function LineHero({
+function SocialHero({
   nextParam,
   router,
+  liffConfigured,
+  googleConfigured,
 }: {
   nextParam: string | null;
   router: ReturnType<typeof useRouter>;
+  liffConfigured: boolean;
+  googleConfigured: boolean;
 }): JSX.Element {
   const setAuth = useAuthStore((s) => s.setAuth);
-  const [loading, setLoading] = useState(false);
+  const [busyProvider, setBusyProvider] = useState<'line' | 'google' | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
-  // Re-read query params here so the closure inside completeLineLogin
-  // can detect `?source=capacitor` without an extra prop drill.
   const sp = useSearchParams();
 
-  // When LIFF redirects the user back from access.line.me, we land on
-  // /login again. Auto-detect the active LIFF session and complete the
-  // exchange with our backend without making the user tap the button
-  // twice.
+  // Auto-complete LIFF (LINE) on landing if a session already exists.
   useEffect(() => {
+    if (!liffConfigured) return;
     let cancelled = false;
     (async () => {
       try {
-        // Cheap check: if LIFF has stored state we'll find an id_token
-        // immediately. Otherwise this throws LOGIN_REQUIRED and we just
-        // sit on the hero, waiting for the user to tap the button.
-        // We swallow the throw silently — it's the expected first load.
         const idToken = await liffLogin({
           redirectUri:
             typeof window !== 'undefined' ? window.location.href : undefined,
         });
         if (cancelled) return;
-        await completeLineLogin(idToken);
+        await completeLogin('line', idToken);
       } catch (err) {
         if (err instanceof LiffError) {
           if (err.code === 'LOGIN_REQUIRED' || err.code === 'NOT_CONFIGURED') {
-            return; // expected — user hasn't tapped the button yet
+            return;
           }
         }
-        // Any other surprise (init failure, network) is shown so the user
-        // can decide to fall back to the staff link.
         if (!cancelled) {
           setError(toFriendly(err));
         }
@@ -121,12 +139,24 @@ function LineHero({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [liffConfigured]);
 
-  async function completeLineLogin(idToken: string): Promise<void> {
-    setLoading(true);
+  // Note: Google sign-in inside Capacitor uses the native plugin
+  // (@codetrix-studio/capacitor-google-auth) so the id_token round-trip
+  // happens in-process — no bounce-back URL or deep-link needed for
+  // Google. LINE still bounces because LIFF rejects `https://localhost`
+  // as a redirect_uri.
+
+  async function completeLogin(
+    provider: 'line' | 'google',
+    idToken: string,
+  ): Promise<void> {
+    setBusyProvider(provider);
     try {
-      const res = await api.auth.line({ idToken });
+      const res =
+        provider === 'line'
+          ? await api.auth.line({ idToken })
+          : await api.auth.google({ idToken });
       setAuth({ user: res.user, token: res.accessToken });
       void tracker.identify(res.user.id, res.accessToken);
 
@@ -146,7 +176,6 @@ function LineHero({
         // Best-effort — never block the login.
       }
 
-      // Restore ?next= captured before the LIFF redirect.
       const storedNext =
         typeof window !== 'undefined'
           ? window.sessionStorage.getItem(NEXT_STORAGE_KEY)
@@ -156,24 +185,19 @@ function LineHero({
       }
       const target = nextParam ?? storedNext ?? '/feed';
 
-      // Phase 21.1 — Capacitor bounce-back.
-      //
-      // When the LIFF flow was kicked off from the native APK, the user is
-      // currently inside a Chrome Custom Tab on Cloudflare Pages. We hand
-      // the tokens back to the host app via the `npcommerce://` custom
-      // scheme intent registered in AndroidManifest. The Capacitor
-      // `appUrlOpen` listener (in `NativeBridge`) writes them into the
-      // auth store and routes to /feed. We leave this tab in a stale
-      // state — the OS will close it when the user pops back to the app.
+      // Phase 21.1 — Capacitor bounce-back is ONLY needed for LINE
+      // (LIFF rejects `https://localhost` as a redirect_uri so the
+      // OAuth flow has to run on the public origin then deep-link back).
+      // Google uses the native plugin and never reaches this branch
+      // from Capacitor — the in-process plugin call returned an
+      // id_token and we routed normally.
       const isFromCapacitor = sp.get('source') === 'capacitor';
-      if (isFromCapacitor && typeof window !== 'undefined') {
+      if (isFromCapacitor && provider === 'line' && typeof window !== 'undefined') {
         const params = new URLSearchParams({
           token: res.accessToken,
-          // refreshToken is opaque to the JS bundle (we receive it via
-          // httpOnly cookie on the API response). If we ever surface it
-          // in `res` we'd add it here too.
           userId: res.user.id,
           target,
+          provider,
         });
         window.location.href = `npcommerce://login-success?${params.toString()}`;
         return;
@@ -183,19 +207,14 @@ function LineHero({
     } catch (err) {
       setError(err instanceof ApiError ? err.message : toFriendly(err));
     } finally {
-      setLoading(false);
+      setBusyProvider(null);
     }
   }
 
-  async function onTap(): Promise<void> {
+  async function onLineTap(): Promise<void> {
     setError(null);
-    setLoading(true);
+    setBusyProvider('line');
     try {
-      // Stash the ?next= so we can read it back after the LIFF redirect
-      // brings the user to a fresh /login render (URL params are
-      // preserved by LINE's redirect, but adding sessionStorage as a
-      // belt-and-suspenders helps if the user opens /login in a new tab
-      // first then taps the button later).
       if (nextParam && typeof window !== 'undefined') {
         window.sessionStorage.setItem(NEXT_STORAGE_KEY, nextParam);
       }
@@ -203,40 +222,92 @@ function LineHero({
         redirectUri:
           typeof window !== 'undefined' ? window.location.href : undefined,
       });
-      // If we got here LIFF was already logged in — complete immediately.
-      await completeLineLogin(idToken);
+      await completeLogin('line', idToken);
     } catch (err) {
       if (err instanceof LiffError && err.code === 'LOGIN_REQUIRED') {
-        // Expected — page is about to redirect. Keep the spinner up.
         return;
       }
       setError(toFriendly(err));
-      setLoading(false);
+      setBusyProvider(null);
     }
   }
+
+  async function onGoogleTap(): Promise<void> {
+    setError(null);
+    setBusyProvider('google');
+    try {
+      if (nextParam && typeof window !== 'undefined') {
+        window.sessionStorage.setItem(NEXT_STORAGE_KEY, nextParam);
+      }
+      const idToken = await googleSignIn();
+      await completeLogin('google', idToken);
+    } catch (err) {
+      if (err instanceof GoogleAuthError && err.code === 'PROMPT_DISMISSED') {
+        // User closed the picker — silently reset, no scary error.
+        setBusyProvider(null);
+        return;
+      }
+      setError(toFriendly(err));
+      setBusyProvider(null);
+    }
+  }
+
+  const showLine = liffConfigured;
+  const showGoogle = googleConfigured;
+  const subtitle = showLine && showGoogle
+    ? 'เลือกวิธีที่สะดวก เพื่อช้อปและรับข่าวสารร้านโปรด'
+    : showLine
+    ? 'เข้าสู่ระบบด้วย LINE เพื่อช้อปและรับข่าวสารร้านโปรด'
+    : 'เข้าสู่ระบบด้วย Google เพื่อช้อปและรับข่าวสารร้านโปรด';
 
   return (
     <LoginShell>
       <h1 className="animate-slide-up mt-6 font-display text-3xl font-bold tracking-tightest text-ink-900">
         ยินดีต้อนรับ
       </h1>
-      <p className="mt-1.5 text-center text-sm text-ink-500">
-        เข้าสู่ระบบด้วย LINE เพื่อช้อปและรับข่าวสารร้านโปรด
-      </p>
+      <p className="mt-1.5 text-center text-sm text-ink-500">{subtitle}</p>
 
       <div
         className="glass-strong animate-slide-up mt-8 w-full space-y-3 rounded-4xl p-5 shadow-soft"
         style={{ animationDelay: '60ms' }}
       >
-        <button
-          type="button"
-          onClick={onTap}
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#06C755] px-4 py-3.5 text-base font-semibold text-white shadow-soft transition active:scale-[0.985] disabled:opacity-60"
-        >
-          <LineGlyph className="h-5 w-5" />
-          {loading ? 'กำลังเชื่อมต่อ LINE…' : 'เข้าสู่ระบบด้วย LINE'}
-        </button>
+        {showLine ? (
+          <button
+            type="button"
+            onClick={onLineTap}
+            disabled={busyProvider !== null}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#06C755] px-4 py-3.5 text-base font-semibold text-white shadow-soft transition active:scale-[0.985] disabled:opacity-60"
+          >
+            <LineGlyph className="h-5 w-5" />
+            {busyProvider === 'line'
+              ? 'กำลังเชื่อมต่อ LINE…'
+              : 'เข้าสู่ระบบด้วย LINE'}
+          </button>
+        ) : null}
+
+        {showLine && showGoogle ? (
+          <div className="flex items-center gap-3 py-1">
+            <span className="h-px flex-1 bg-ink-200/60" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+              หรือ
+            </span>
+            <span className="h-px flex-1 bg-ink-200/60" />
+          </div>
+        ) : null}
+
+        {showGoogle ? (
+          <button
+            type="button"
+            onClick={onGoogleTap}
+            disabled={busyProvider !== null}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-ink-200 bg-white px-4 py-3.5 text-base font-semibold text-ink-800 shadow-soft transition active:scale-[0.985] disabled:opacity-60"
+          >
+            <GoogleGlyph className="h-5 w-5" />
+            {busyProvider === 'google'
+              ? 'กำลังเชื่อมต่อ Google…'
+              : 'เข้าสู่ระบบด้วย Google'}
+          </button>
+        ) : null}
 
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
@@ -245,7 +316,7 @@ function LineHero({
         ) : null}
 
         <p className="px-1 text-center text-[11px] leading-relaxed text-ink-500">
-          เราจะใช้ชื่อและรูปโปรไฟล์ LINE ของคุณเป็น default
+          เราจะใช้ชื่อและรูปโปรไฟล์จากบัญชีของคุณเป็น default
           {'\u00A0'}แก้ไขได้ภายหลังที่{' '}
           <span className="font-medium text-ink-700">โปรไฟล์</span>
         </p>
@@ -262,6 +333,7 @@ function LineHero({
   );
 }
 
+
 // =============================================================================
 // Staff form — fallback for admin / merchant / rider / creator accounts
 // =============================================================================
@@ -269,10 +341,12 @@ function StaffForm({
   nextParam,
   router,
   liffConfigured,
+  googleConfigured,
 }: {
   nextParam: string | null;
   router: ReturnType<typeof useRouter>;
   liffConfigured: boolean;
+  googleConfigured: boolean;
 }): JSX.Element {
   const setAuth = useAuthStore((s) => s.setAuth);
   const [email, setEmail] = useState('user@np.dev');
@@ -379,13 +453,13 @@ function StaffForm({
         </div>
       </form>
 
-      {liffConfigured ? (
+      {liffConfigured || googleConfigured ? (
         <Link
           href="/login"
           prefetch={false}
           className="mt-6 text-xs text-ink-400 underline-offset-2 hover:text-ink-600 hover:underline"
         >
-          ← กลับไปเข้าสู่ระบบด้วย LINE
+          ← กลับไปเข้าสู่ระบบด้วยโซเชียล
         </Link>
       ) : (
         <p className="mt-6 text-center text-sm text-ink-600">
@@ -457,6 +531,32 @@ function LineGlyph({ className }: { className?: string }): JSX.Element {
   );
 }
 
+// =============================================================================
+// Google brand glyph (Google's official "G" mark, inline SVG)
+// =============================================================================
+function GoogleGlyph({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
 function toFriendly(err: unknown): string {
   if (err instanceof LiffError) {
     switch (err.code) {
@@ -466,6 +566,22 @@ function toFriendly(err: unknown): string {
         return 'เริ่มต้น LIFF ไม่สำเร็จ — ลองรีเฟรชแอป';
       case 'NO_ID_TOKEN':
         return 'ไม่ได้รับ id_token จาก LINE — ลองใหม่อีกครั้ง';
+      default:
+        return err.message;
+    }
+  }
+  if (err instanceof GoogleAuthError) {
+    switch (err.code) {
+      case 'NOT_CONFIGURED':
+        return 'ยังไม่ได้ตั้งค่า Google (NEXT_PUBLIC_GOOGLE_CLIENT_ID)';
+      case 'SCRIPT_LOAD_FAILED':
+        return 'โหลด Google SDK ไม่สำเร็จ — ตรวจสอบสัญญาณเน็ตแล้วลองใหม่';
+      case 'PROMPT_DISMISSED':
+        return 'หน้าต่าง Google ถูกปิด — ลองอีกครั้ง';
+      case 'NO_CREDENTIAL':
+        return 'ไม่ได้รับ id_token จาก Google — ลองใหม่อีกครั้ง';
+      case 'NATIVE_PLUGIN_FAILED':
+        return 'เข้าสู่ระบบ Google ไม่สำเร็จ — โปรดอัปเดต Google Play services แล้วลองใหม่';
       default:
         return err.message;
     }

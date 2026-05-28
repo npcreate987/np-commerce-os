@@ -122,6 +122,31 @@ const config: CapacitorConfig = {
       channelUrl: '',
       statsUrl: '',
     },
+    // Phase 21.2 — Google Sign-In (native).
+    //
+    // Uses @codetrix-studio/capacitor-google-auth so the Android app pops
+    // the native Google account picker via Google Play Services instead of
+    // bouncing through a Chrome Custom Tab.
+    //
+    // `clientId` here is the **Web** OAuth Client ID (.apps.googleusercontent.com).
+    // The plugin uses it as `serverClientId` so the returned `idToken.aud`
+    // matches what our backend expects (matches GOOGLE_CLIENT_ID on Railway).
+    //
+    // Google Cloud Console must ALSO contain a separate "Android" OAuth Client
+    // registered with the signing key's SHA-1 fingerprint — that registration
+    // is what authorises Google Play Services to mint id_tokens for our APK,
+    // but the Android Client ID itself never appears in code.
+    //
+    // The value is filled at build time from NEXT_PUBLIC_GOOGLE_CLIENT_ID so
+    // dev / preview / production can each ship their own client without
+    // editing this file. Empty string → plugin no-ops on Android (web users
+    // still get the GIS popup fallback).
+    GoogleAuth: {
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '',
+      scopes: ['profile', 'email', 'openid'],
+      grantOfflineAccess: false,
+      forceCodeForRefreshToken: false,
+    },
   },
 };
 

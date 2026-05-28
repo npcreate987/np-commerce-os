@@ -37,6 +37,15 @@ export const lineLoginSchema = z.object({
 });
 export type LineLoginInput = z.infer<typeof lineLoginSchema>;
 
+/// Phase 21.2 — Google Sign-In. Client passes an id_token obtained via
+/// Google Identity Services (`google.accounts.id`); server verifies it
+/// against Google's tokeninfo endpoint then issues our standard AuthResponse.
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(20).max(4096),
+  nonce: z.string().min(8).max(128).optional(),
+});
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+
 export const authResponseSchema = z.object({
   user: userSchema,
   accessToken: z.string(),

@@ -44,6 +44,7 @@
     "@capacitor/splash-screen": "^6.0.0",
     "@capacitor/status-bar": "^6.0.0",
     "@capgo/capacitor-updater": "6",
+    "@codetrix-studio/capacitor-google-auth": "3.4.0-rc.4",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@line/liff": "^2.29.0",
     "@np/types": "workspace:*",

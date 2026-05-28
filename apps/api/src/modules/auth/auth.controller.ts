@@ -1,9 +1,11 @@
 import { Body, Controller, Get, Post, UseGuards, UsePipes } from '@nestjs/common';
 import {
   AuthResponse,
+  GoogleLoginInput,
   LineLoginInput,
   LoginInput,
   SignupInput,
+  googleLoginSchema,
   lineLoginSchema,
   loginSchema,
   signupSchema,
@@ -14,6 +16,7 @@ import { Throttle } from '../../common/throttle/throttler';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LineAuthService } from './line-auth.service';
+import { GoogleAuthService } from './google-auth.service';
 import { z } from 'zod';
 
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(400) });
@@ -24,6 +27,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly lineAuth: LineAuthService,
+    private readonly googleAuth: GoogleAuthService,
   ) {}
 
   // Phase 13.3a — 5 signups / minute per IP. Tight enough that automated
@@ -64,6 +68,15 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(lineLoginSchema))
   line(@Body() body: LineLoginInput): Promise<AuthResponse> {
     return this.lineAuth.login(body);
+  }
+
+  // Phase 21.2 — Google Sign-In. Client passes the `idToken` from Google
+  // Identity Services; same rate limits and validation as LINE.
+  @Post('google')
+  @Throttle({ windowSec: 60, max: 20 })
+  @UsePipes(new ZodValidationPipe(googleLoginSchema))
+  google(@Body() body: GoogleLoginInput): Promise<AuthResponse> {
+    return this.googleAuth.login(body);
   }
 
   @UseGuards(JwtAuthGuard)

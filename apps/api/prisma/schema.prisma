@@ -42,7 +42,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   /// Phase 21 — LINE Login fields.
-  /// "EMAIL" (default) | "LINE" — set on first signup, immutable afterwards.
+  /// "EMAIL" (default) | "LINE" | "GOOGLE" — set on first signup, immutable afterwards.
   authProvider    String  @default("EMAIL")
   /// LINE user ID (`sub` claim from id_token). Globally unique per channel.
   lineUserId      String? @unique
@@ -50,6 +50,14 @@ model User {
   lineDisplayName String?
   /// Snapshot of LINE profile picture URL at last login.
   linePictureUrl  String?
+
+  /// Phase 21.2 — Google Sign-In fields.
+  /// Google user ID (`sub` claim from id_token). Globally unique across Google.
+  googleUserId      String? @unique
+  /// Snapshot of Google display name at last login (auto-synced on every sign-in).
+  googleDisplayName String?
+  /// Snapshot of Google profile picture URL at last login.
+  googlePictureUrl  String?
 
   /// Phase 17 — soft-delete + 30-day grace period
   /// When set, the account is "deletion-pending" — login is blocked,
@@ -67,6 +75,7 @@ model User {
 
   @@index([email])
   @@index([lineUserId])
+  @@index([googleUserId])
   @@index([deletionPurgeAt])
   @@map("users")
 }

@@ -49,24 +49,26 @@ export function NativeBridge({ authToken }: Props): JSX.Element {
       // called within 10s of boot. Wire IMMEDIATELY after splash hides.
       void notifyAppReady();
       cleanupDeepLinks = await wireDeepLinks(async (path, fullUrl) => {
-        // Phase 21.1 — LINE Login bounce-back from Cloudflare Pages.
+        // Phase 21.1 — LINE Login bounce-back from https://tuk-tuk.mobi.
         //
-        // The web /login page on np-commerce.pages.dev finishes the LIFF
-        // flow + token exchange, then redirects the Custom Tab to
-        // `npcommerce://login-success?token=…&userId=…&target=…`. The
-        // Android intent filter for the `npcommerce` scheme routes the
-        // intent here. We:
+        // The web /login page finishes the LIFF flow + token exchange
+        // with our API, then redirects the Custom Tab to
+        // `npcommerce://login-success?token=…&userId=…&target=…&provider=line`.
+        // The Android intent filter for the `npcommerce` scheme routes
+        // here. We:
         //   1. Pull the access token out of the URL
         //   2. Close the system browser tab (best effort)
         //   3. Fetch the User via /users/me using that token
         //   4. Write { user, token } into the auth store
         //   5. Navigate to `target` (defaults to /feed)
         //
+        // Google sign-in does NOT need this bounce — the native plugin
+        // (@codetrix-studio/capacitor-google-auth) returns an id_token
+        // in-process so login completes inside the WebView. This handler
+        // is LINE-only by design.
+        //
         // Mid-flight failure (network, /users/me 401) leaves the user on
-        // /login — they can retry without losing state. We deliberately
-        // don't surface errors via the snackbar because the WebView is
-        // currently showing the LINE spinner UI; a silent reset keeps the
-        // recovery path simple.
+        // /login — they can retry without losing state.
         try {
           const parsed = new URL(fullUrl);
           const isLoginCallback =

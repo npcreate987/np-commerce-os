@@ -150,6 +150,9 @@ importers:
       '@capgo/capacitor-updater':
         specifier: '6'
         version: 6.45.10(@capacitor/core@6.2.1)
+      '@codetrix-studio/capacitor-google-auth':
+        specifier: 3.4.0-rc.4
+        version: 3.4.0-rc.4(@capacitor/core@6.2.1)
       '@ducanh2912/next-pwa':
         specifier: ^10.2.9
         version: 10.2.9(next@14.2.35(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(webpack@5.97.1(postcss@8.5.15))
@@ -870,6 +873,11 @@ packages:
 
   '@capgo/capacitor-updater@6.45.10':
     resolution: {integrity: sha512-mi+F9bQ6dYTk/6CJWV3GWh8dpdQtkbR+ECr7IjimoH+mniD7iBOmVPjRCinC+FcfQPSBwiUvOT0XcWKKx9og5Q==}
+    peerDependencies:
+      '@capacitor/core': ^6.0.0
+
+  '@codetrix-studio/capacitor-google-auth@3.4.0-rc.4':
+    resolution: {integrity: sha512-d548/xKrbMHHbzMYSWnlgZCLZYo2zzY7Onrh3x8ujojrb7atkNK68I6su5WgmaBt4E+R4gxBsWams4554aOFjA==}
     peerDependencies:
       '@capacitor/core': ^6.0.0
 
@@ -7762,6 +7770,10 @@ snapshots:
       '@capacitor/core': 6.2.1
 
   '@capgo/capacitor-updater@6.45.10(@capacitor/core@6.2.1)':
+    dependencies:
+      '@capacitor/core': 6.2.1
+
+  '@codetrix-studio/capacitor-google-auth@3.4.0-rc.4(@capacitor/core@6.2.1)':
     dependencies:
       '@capacitor/core': 6.2.1
 

@@ -230,6 +230,10 @@ export const api = {
     // backend verifies it with LINE then issues our usual AuthResponse.
     line: (input: { idToken: string; nonce?: string }) =>
       request<AuthResponse>('POST', '/auth/line', { body: input }),
+    // Phase 21.2 — Google Sign-In. Frontend passes the id_token from GIS;
+    // backend verifies via Google's tokeninfo endpoint, returns same AuthResponse.
+    google: (input: { idToken: string; nonce?: string }) =>
+      request<AuthResponse>('POST', '/auth/google', { body: input }),
     me: (token: string) => request<User>('GET', '/users/me', { token }),
   },
 

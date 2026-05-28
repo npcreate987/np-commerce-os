@@ -62,4 +62,11 @@ export const env = {
    * email/password staff form.
    */
   lineLiffId: process.env.NEXT_PUBLIC_LINE_LIFF_ID ?? '',
+  /**
+   * Phase 21.2 — Google OAuth Client ID (Web type) for Google Sign-In.
+   * Exposed via NEXT_PUBLIC_GOOGLE_CLIENT_ID. Required by the GIS SDK
+   * (`google.accounts.id.initialize({ client_id })`). Falsy → the Google
+   * button is hidden and we silently degrade.
+   */
+  googleClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '',
 };

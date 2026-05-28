@@ -41,6 +41,20 @@ export const lineLoginSchema = z.object({
 });
 export type LineLoginInput = z.infer<typeof lineLoginSchema>;
 
+/// Phase 21.2 — Google Sign-In. Frontend obtains `idToken` via Google
+/// Identity Services (`google.accounts.id`) and POSTs it here; the
+/// backend verifies the token against Google's tokeninfo endpoint,
+/// then issues our standard AuthResponse. Real Google id_tokens are
+/// 600-1500 chars — bumping ceiling to 4096 as a generous safety margin.
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(20).max(4096),
+  /// Optional nonce we generated client-side and passed to GIS via the
+  /// `nonce` option. When provided, the server enforces nonce match
+  /// against the id_token claim to harden replay attacks.
+  nonce: z.string().min(8).max(128).optional(),
+});
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+
 export const authResponseSchema = z.object({
   user: userSchema,
   accessToken: z.string(),

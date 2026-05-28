@@ -47,7 +47,7 @@ import type { Liff } from '@line/liff';
  *
  * Keep this constant in sync with the production web deployment.
  */
-const CAPACITOR_BOUNCE_URL = 'https://np-commerce.pages.dev/login?source=capacitor';
+const CAPACITOR_BOUNCE_URL = 'https://tuk-tuk.mobi/login?source=capacitor';
 
 /**
  * Custom error class so consumers don't depend on SDK-internal error
